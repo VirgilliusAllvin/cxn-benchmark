@@ -1,0 +1,93 @@
+/* ── Fontes locais (sem depender de Google CDN) ─────────────────────────── */
+@import '@fontsource/plus-jakarta-sans/300.css';
+@import '@fontsource/plus-jakarta-sans/400.css';
+@import '@fontsource/plus-jakarta-sans/500.css';
+@import '@fontsource/plus-jakarta-sans/600.css';
+@import '@fontsource/plus-jakarta-sans/700.css';
+@import '@fontsource/plus-jakarta-sans/800.css';
+@import '@fontsource/dm-mono/400.css';
+@import '@fontsource/dm-mono/500.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Variáveis de marca ──────────────────────────────────────────────────── */
+:root {
+  --brand-blue:  #1818db;
+  --brand-teal:  #1ddbb1;
+  --brand-bg:    #f7f7f7;
+  --brand-gray:  #999999;
+  --brand-dark:  #494949;
+  --brand-black: #161616;
+
+  --font-body:    'Plus Jakarta Sans', 'Segoe UI', system-ui, sans-serif;
+  --font-mono:    'DM Mono', 'Consolas', monospace;
+}
+
+/* ── Reset base ──────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--brand-bg);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--brand-black);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "kern" 1, "liga" 1;
+}
+
+#root { width: 100%; min-height: 100vh; }
+
+/* ── Scrollbar ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar        { width: 5px; height: 5px; }
+::-webkit-scrollbar-track  { background: transparent; }
+::-webkit-scrollbar-thumb  { background: #d1d5db; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+
+/* ── Tipografia ──────────────────────────────────────────────────────────── */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-body);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin: 0;
+  color: var(--brand-black);
+}
+
+/* ── Score colours ───────────────────────────────────────────────────────── */
+.score-0 { color: #494949; }
+.score-1 { color: #ef4444; }
+.score-2 { color: #f97316; }
+.score-3 { color: #eab308; }
+.score-4 { color: #22c55e; }
+.score-5 { color: #1ddbb1; }
+
+/* ── Range input ─────────────────────────────────────────────────────────── */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 3px;
+  background: #e5e7eb;
+  outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: var(--brand-blue);
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 1px 4px rgba(0,0,0,.18);
+}
+
+/* ── Animações ───────────────────────────────────────────────────────────── */
+@keyframes fadeIn  { from { opacity: 0; }                             to { opacity: 1; } }
+@keyframes slideUp { from { opacity: 0; transform: translateY(10px);} to { opacity: 1; transform: translateY(0); } }
+
+.animate-fade-in  { animation: fadeIn  0.35s ease-out both; }
+.animate-slide-up { animation: slideUp 0.35s ease-out both; }
