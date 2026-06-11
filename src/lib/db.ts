@@ -1,6 +1,6 @@
 /**
  * db.ts — Funções de acesso à base de dados Supabase.
- * Cada função devolve dados tipados ou lança erro.
+ * Usa bulk queries para minimizar o número de chamadas à API.
  */
 import { supabase } from './supabase';
 import type { Bank, Evaluation, CriterionScore, Evidence, EvaluationStatus, UserProfile } from './types';
@@ -87,6 +87,30 @@ function mapEvaluation(
   };
 }
 
+// ── Bulk loader interno ───────────────────────────────────────────────────────
+
+/** Dado uma lista de IDs de avaliação, carrega scores + evidências em 3 queries */
+async function loadEvaluationsBulk(evalRows: DbEvaluation[]): Promise<Evaluation[]> {
+  if (evalRows.length === 0) return [];
+  const ids = evalRows.map(r => r.id);
+
+  const [scRes, evidRes] = await Promise.all([
+    supabase.from('criterion_scores').select('*').in('evaluation_id', ids),
+    supabase.from('evidences').select('*').in('evaluation_id', ids),
+  ]);
+
+  const scores = (scRes.data ?? []) as DbCriterionScore[];
+  const evidences = (evidRes.data ?? []) as DbEvidence[];
+
+  return evalRows.map(row =>
+    mapEvaluation(
+      row,
+      scores.filter(s => s.evaluation_id === row.id),
+      evidences.filter(e => e.evaluation_id === row.id),
+    )
+  );
+}
+
 // ── Perfil ────────────────────────────────────────────────────────────────────
 
 export async function fetchProfile(userId: string): Promise<UserProfile | null> {
@@ -147,61 +171,53 @@ export async function saveDimensionWeights(weights: Record<string, number>): Pro
   if (error) throw error;
 }
 
-// ── Avaliações ────────────────────────────────────────────────────────────────
+// ── Avaliações — bulk ─────────────────────────────────────────────────────────
 
-/** Carrega avaliação completa (scores + evidências) por id */
-async function fetchEvaluationById(evalId: string): Promise<Evaluation | null> {
-  const [evRes, scRes, evidRes] = await Promise.all([
-    supabase.from('evaluations').select('*').eq('id', evalId).single(),
-    supabase.from('criterion_scores').select('*').eq('evaluation_id', evalId),
-    supabase.from('evidences').select('*').eq('evaluation_id', evalId),
-  ]);
-  if (evRes.error || !evRes.data) return null;
-  return mapEvaluation(evRes.data, scRes.data ?? [], evidRes.data ?? []);
-}
-
-/** Avaliação do agente para um banco (própria) */
-export async function fetchMyEvaluationForBank(bankId: string): Promise<Evaluation | null> {
+/** Avaliações do agente actual (todas) — 1 query de avaliações + 2 bulk */
+export async function fetchMyEvaluations(): Promise<Evaluation[]> {
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
+  if (!user) return [];
   const { data, error } = await supabase
     .from('evaluations')
-    .select('id')
-    .eq('bank_id', bankId)
+    .select('*')
     .eq('agente_id', user.id)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single();
-  if (error || !data) return null;
-  return fetchEvaluationById(data.id);
+    .order('updated_at', { ascending: false });
+  if (error || !data) return [];
+  return loadEvaluationsBulk(data as DbEvaluation[]);
 }
 
-/** Avaliação aprovada para um banco (para o ranking/dashboard) */
-export async function fetchApprovedEvaluationForBank(bankId: string): Promise<Evaluation | null> {
+/** Avaliações aprovadas (para ranking/dashboard) — 1 query + 2 bulk */
+export async function fetchApprovedEvaluations(): Promise<Evaluation[]> {
   const { data, error } = await supabase
     .from('evaluations')
-    .select('id')
-    .eq('bank_id', bankId)
+    .select('*')
     .eq('status', 'approved')
-    .order('reviewed_at', { ascending: false })
-    .limit(1)
-    .single();
-  if (error || !data) return null;
-  return fetchEvaluationById(data.id);
+    .order('reviewed_at', { ascending: false });
+  if (error || !data) return [];
+  return loadEvaluationsBulk(data as DbEvaluation[]);
 }
 
-/** Todas as avaliações (para o gestor — fila de revisão) */
+/** Todas as avaliações (gestor) — 1 query + 2 bulk */
 export async function fetchAllEvaluations(): Promise<Evaluation[]> {
   const { data, error } = await supabase
     .from('evaluations')
-    .select('id')
+    .select('*')
     .order('updated_at', { ascending: false });
   if (error || !data) return [];
-  const evals = await Promise.all(data.map(row => fetchEvaluationById(row.id)));
-  return evals.filter((e): e is Evaluation => e !== null);
+  return loadEvaluationsBulk(data as DbEvaluation[]);
 }
 
-/** Cria uma nova avaliação em draft para um banco */
+/** Avaliação individual por id (usada após criar/submeter) */
+export async function fetchEvaluationById(evalId: string): Promise<Evaluation | null> {
+  const { data, error } = await supabase
+    .from('evaluations').select('*').eq('id', evalId).single();
+  if (error || !data) return null;
+  const evals = await loadEvaluationsBulk([data as DbEvaluation]);
+  return evals[0] ?? null;
+}
+
+// ── Avaliação CRUD ────────────────────────────────────────────────────────────
+
 export async function createEvaluation(bankId: string): Promise<Evaluation | null> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
@@ -214,29 +230,21 @@ export async function createEvaluation(bankId: string): Promise<Evaluation | nul
   return fetchEvaluationById(data.id);
 }
 
-/** Guarda (upsert) o score de um critério */
 export async function upsertCriterionScore(
   evaluationId: string,
   criterionId: string,
   patch: Partial<{ score: number; observations: string; device: string }>,
 ): Promise<void> {
   const { error } = await supabase.from('criterion_scores').upsert(
-    {
-      evaluation_id: evaluationId,
-      criterion_id: criterionId,
-      updated_at: new Date().toISOString(),
-      ...patch,
-    },
+    { evaluation_id: evaluationId, criterion_id: criterionId, updated_at: new Date().toISOString(), ...patch },
     { onConflict: 'evaluation_id,criterion_id' },
   );
   if (error) throw error;
-  // actualiza updated_at na avaliação
   await supabase.from('evaluations')
     .update({ updated_at: new Date().toISOString() })
     .eq('id', evaluationId);
 }
 
-/** Adiciona evidência */
 export async function insertEvidence(
   evaluationId: string,
   criterionId: string,
@@ -255,13 +263,11 @@ export async function insertEvidence(
   return data.id;
 }
 
-/** Remove evidência */
 export async function deleteEvidence(evidenceId: string): Promise<void> {
   const { error } = await supabase.from('evidences').delete().eq('id', evidenceId);
   if (error) throw error;
 }
 
-/** Actualiza notas da avaliação */
 export async function updateEvaluationNotes(evaluationId: string, notes: string): Promise<void> {
   const { error } = await supabase.from('evaluations')
     .update({ notes, updated_at: new Date().toISOString() })
@@ -271,7 +277,6 @@ export async function updateEvaluationNotes(evaluationId: string, notes: string)
 
 // ── Workflow ──────────────────────────────────────────────────────────────────
 
-/** Agente submete avaliação para revisão */
 export async function submitEvaluation(evaluationId: string): Promise<void> {
   const { error } = await supabase.from('evaluations').update({
     status: 'submitted',
@@ -282,7 +287,6 @@ export async function submitEvaluation(evaluationId: string): Promise<void> {
   if (error) throw error;
 }
 
-/** Gestor aprova avaliação */
 export async function approveEvaluation(evaluationId: string): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();
   const { error } = await supabase.from('evaluations').update({
@@ -295,7 +299,6 @@ export async function approveEvaluation(evaluationId: string): Promise<void> {
   if (error) throw error;
 }
 
-/** Gestor rejeita avaliação com comentário */
 export async function rejectEvaluation(evaluationId: string, comment: string): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();
   const { error } = await supabase.from('evaluations').update({

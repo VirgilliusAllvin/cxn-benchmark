@@ -12,7 +12,7 @@ import type { AppState, Bank, BankData, Evaluation, EvaluationStatus } from './t
 import { CRITERIA, DEFAULT_DIMENSION_WEIGHTS } from './data';
 import {
   fetchBanks, fetchDimensionWeights, fetchAllEvaluations,
-  fetchApprovedEvaluationForBank, fetchMyEvaluationForBank,
+  fetchMyEvaluations, fetchApprovedEvaluations,
   upsertBank, deactivateBank, saveDimensionWeights,
   upsertCriterionScore, insertEvidence, deleteEvidence,
   updateEvaluationNotes, submitEvaluation, approveEvaluation,
@@ -87,23 +87,14 @@ function buildBanksMap(
 /** Carrega todos os dados do Supabase. Chamado pelo AppLayout após auth. */
 export async function loadFromSupabase(isGestor: boolean): Promise<void> {
   try {
-    const [bankList, dimensionWeights, allEvals] = await Promise.all([
+    // 3 queries em paralelo (em vez de 35+)
+    const [bankList, dimensionWeights, myEvals, approvedEvals, allEvals] = await Promise.all([
       fetchBanks(),
       fetchDimensionWeights(),
+      isGestor ? Promise.resolve([]) : fetchMyEvaluations(),
+      fetchApprovedEvaluations(),
       isGestor ? fetchAllEvaluations() : Promise.resolve([]),
     ]);
-
-    // Para agentes: carregar as suas próprias avaliações por banco
-    const myEvals: Evaluation[] = [];
-    if (!isGestor) {
-      const results = await Promise.all(bankList.map(b => fetchMyEvaluationForBank(b.id)));
-      myEvals.push(...results.filter((e): e is Evaluation => e !== null));
-    }
-
-    // Avaliações aprovadas (para cálculos do dashboard/ranking)
-    const approvedEvals: Evaluation[] = [];
-    const approved = await Promise.all(bankList.map(b => fetchApprovedEvaluationForBank(b.id)));
-    approvedEvals.push(...approved.filter((e): e is Evaluation => e !== null));
 
     const banks = buildBanksMap(bankList, approvedEvals, myEvals);
 
