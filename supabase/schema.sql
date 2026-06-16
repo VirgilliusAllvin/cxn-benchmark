@@ -146,7 +146,7 @@ create table if not exists evidences (
   id             uuid primary key default gen_random_uuid(),
   evaluation_id  uuid references evaluations(id) on delete cascade,
   criterion_id   text not null,
-  type           text not null check (type in ('link', 'note')),
+  type           text not null check (type in ('link', 'note', 'image')),
   content        text not null,
   description    text default '',
   collected_at   timestamptz default now(),

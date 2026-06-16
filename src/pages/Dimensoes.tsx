@@ -17,10 +17,10 @@ export function Dimensoes() {
   const allBankData = useMemo(() => Object.values(state.banks), [state]);
 
   return (
-    <div className="p-8 animate-fade-in">
+    <div className="p-4 md:p-8 animate-fade-in">
       <PageHeader title="Dimensões" subtitle="Análise de mercado por dimensão de avaliação" />
 
-      <div className="grid grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {DIMENSIONS.map(dim => {
           const isExp = expanded === dim.id;
           const marketAvg = marketDimensionAvg(allBankData, dim.id);

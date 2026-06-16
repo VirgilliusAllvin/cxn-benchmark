@@ -31,7 +31,7 @@ export function Ranking() {
   const podiumOrder = [podium[1], podium[0], podium[2]];
 
   return (
-    <div className="p-8 animate-fade-in">
+    <div className="p-4 md:p-8 animate-fade-in">
       <PageHeader
         title="Ranking Geral"
         subtitle={`${withScores.length} banco${withScores.length !== 1 ? 's' : ''} aprovado${withScores.length !== 1 ? 's' : ''} de ${bankList.length} no total`}
@@ -49,7 +49,7 @@ export function Ranking() {
       {podium.length >= 1 && (
         <div className="mb-10">
           <h2 className="text-xs font-bold text-brand-gray uppercase tracking-widest mb-6">Pódio</h2>
-          <div className="flex items-end justify-center gap-4">
+          <div className="flex items-end justify-center gap-2 sm:gap-4">
             {PODIUM_CONFIG.map(({ pos, icon: Icon, color, bgColor, iconSize, scale }, i) => {
               const b = podiumOrder[i];
               if (!b) return null;
@@ -65,7 +65,7 @@ export function Ranking() {
                     <div className="text-xs font-semibold text-brand-gray">{bank?.shortName}</div>
                     <Score100Badge score={b.score} size="md" />
                     <div
-                      className={`${heights[i]} w-28 rounded-t-2xl flex flex-col items-center justify-end pb-4 gap-2`}
+                      className={`${heights[i]} w-20 sm:w-28 rounded-t-2xl flex flex-col items-center justify-end pb-4 gap-2`}
                       style={{ backgroundColor: bgColor, border: `1px solid ${color}22` }}
                     >
                       <Icon size={iconSize} style={{ color }} />

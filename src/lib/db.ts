@@ -35,7 +35,7 @@ interface DbEvidence {
   id: string;
   evaluation_id: string;
   criterion_id: string;
-  type: 'link' | 'note';
+  type: 'link' | 'note' | 'image';
   content: string;
   description: string;
   collected_at: string;
@@ -245,10 +245,23 @@ export async function upsertCriterionScore(
     .eq('id', evaluationId);
 }
 
+/** Carrega uma imagem para o bucket 'evidences' e devolve o URL público. */
+export async function uploadEvidenceImage(file: File): Promise<string> {
+  const ext = file.name.split('.').pop()?.toLowerCase() || 'png';
+  const path = `${crypto.randomUUID()}.${ext}`;
+  const { error } = await supabase.storage.from('evidences').upload(path, file, {
+    cacheControl: '3600',
+    upsert: false,
+  });
+  if (error) throw error;
+  const { data } = supabase.storage.from('evidences').getPublicUrl(path);
+  return data.publicUrl;
+}
+
 export async function insertEvidence(
   evaluationId: string,
   criterionId: string,
-  ev: { type: 'link' | 'note'; content: string; description: string; tags: string[] },
+  ev: { type: 'link' | 'note' | 'image'; content: string; description: string; tags: string[] },
 ): Promise<string> {
   const { data, error } = await supabase.from('evidences').insert({
     evaluation_id: evaluationId,

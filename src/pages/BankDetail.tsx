@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import {
   ChevronLeft, ClipboardList, Link2, FileText, Trash2,
-  CheckCircle, Clock, XCircle, AlertTriangle,
+  CheckCircle, Clock, XCircle, AlertTriangle, Image as ImageIcon,
 } from 'lucide-react';
 import { DIMENSIONS, CRITERIA, CRITERIA_BY_DIMENSION, TAG_COLORS } from '../lib/data';
 import { useStore } from '../lib/store';
@@ -73,7 +73,7 @@ export function BankDetail() {
   }
 
   return (
-    <div className="p-8 animate-fade-in">
+    <div className="p-4 md:p-8 animate-fade-in">
       {/* Back */}
       <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 text-xs text-brand-gray hover:text-brand-black mb-6 transition-colors">
         <ChevronLeft size={14} /> Voltar
@@ -81,7 +81,7 @@ export function BankDetail() {
 
       {/* Header */}
       <div className="bg-white rounded-2xl p-6 shadow-card border border-gray-100 mb-6">
-        <div className="flex items-start justify-between">
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-5">
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-bold text-white"
               style={{ background: '#1818db' }}>
@@ -107,7 +107,7 @@ export function BankDetail() {
             </div>
           </div>
 
-          <div className="flex items-start gap-6">
+          <div className="flex items-start gap-4 sm:gap-6 flex-wrap">
             <div className="text-center">
               <Score100Badge score={score} size="xl" />
               <div className="text-xs text-brand-gray mt-1">Score Global</div>
@@ -129,8 +129,8 @@ export function BankDetail() {
       </div>
 
       {/* Radar + Dimensions */}
-      <div className="grid grid-cols-5 gap-5 mb-6">
-        <div className="col-span-2 bg-white rounded-2xl p-5 shadow-card border border-gray-100">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 mb-6">
+        <div className="lg:col-span-2 bg-white rounded-2xl p-5 shadow-card border border-gray-100">
           <h2 className="text-sm font-bold font-display text-brand-black mb-3">Perfil por Dimensão</h2>
           <ResponsiveContainer width="100%" height={240}>
             <RadarChart data={radarData} margin={{ top: 10, right: 20, bottom: 10, left: 20 }}>
@@ -142,7 +142,7 @@ export function BankDetail() {
           </ResponsiveContainer>
         </div>
 
-        <div className="col-span-3 bg-white rounded-2xl p-5 shadow-card border border-gray-100">
+        <div className="lg:col-span-3 bg-white rounded-2xl p-5 shadow-card border border-gray-100">
           <h2 className="text-sm font-bold font-display text-brand-black mb-4">Score por Dimensão</h2>
           <div className="space-y-3">
             {DIMENSIONS.map(d => {
@@ -181,7 +181,7 @@ export function BankDetail() {
 
       {/* Tabs */}
       <div className="bg-white rounded-2xl shadow-card border border-gray-100 overflow-hidden">
-        <div className="flex items-center border-b border-gray-100 px-2">
+        <div className="flex items-center border-b border-gray-100 px-2 overflow-x-auto">
           {TABS.map(tab => (
             <button
               key={tab.key}
@@ -208,7 +208,7 @@ export function BankDetail() {
         {/* Scorecard */}
         {activeTab === 'scorecard' && (
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+            <table className="w-full min-w-[720px] text-xs">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50/50">
                   <th className="text-left px-5 py-3 text-brand-gray font-medium">ID</th>
@@ -289,12 +289,16 @@ export function BankDetail() {
                 </Link>
               </div>
             ) : (
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {allEvidences.map(ev => (
                   <div key={ev.id} className="border border-gray-200 rounded-xl p-4 bg-white">
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex items-center gap-1.5">
-                        {ev.type === 'link' ? <Link2 size={12} className="text-brand-blue" /> : <FileText size={12} className="text-brand-gray" />}
+                        {ev.type === 'image'
+                          ? <ImageIcon size={12} className="text-violet-500" />
+                          : ev.type === 'link'
+                            ? <Link2 size={12} className="text-brand-blue" />
+                            : <FileText size={12} className="text-brand-gray" />}
                         <span className="text-[10px] text-brand-gray font-medium">{ev.criterionName}</span>
                       </div>
                       {evalStatus !== 'submitted' && evalStatus !== 'approved' && (
@@ -306,7 +310,11 @@ export function BankDetail() {
                         </button>
                       )}
                     </div>
-                    {ev.type === 'link' ? (
+                    {ev.type === 'image' ? (
+                      <a href={ev.content} target="_blank" rel="noopener noreferrer">
+                        <img src={ev.content} alt="evidência" className="w-full h-32 object-cover rounded-lg border border-gray-100" />
+                      </a>
+                    ) : ev.type === 'link' ? (
                       <a href={ev.content} target="_blank" rel="noopener noreferrer"
                         className="text-xs text-brand-blue hover:underline break-all line-clamp-2">
                         {ev.content}

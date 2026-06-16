@@ -166,7 +166,7 @@ export function useStore() {
   const addEvidence = useCallback(async (
     evaluationId: string,
     criterionId: string,
-    ev: { type: 'link' | 'note'; content: string; description: string; tags: string[] },
+    ev: { type: 'link' | 'note' | 'image'; content: string; description: string; tags: string[] },
   ) => {
     const id = await insertEvidence(evaluationId, criterionId, ev);
     const evaluation = _state.evaluations.find(e => e.id === evaluationId);

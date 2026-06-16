@@ -79,14 +79,14 @@ export function Dashboard() {
   ];
 
   return (
-    <div className="p-8 animate-fade-in">
+    <div className="p-4 md:p-8 animate-fade-in">
       <PageHeader
         title="Dashboard"
         subtitle="Visão geral do benchmarking da banca digital em Angola"
       />
 
       {/* ── KPIs ──────────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-4 gap-4 mb-7">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-7">
         {KPI_CARDS.map(({ label, value, sub, icon: Icon, accent }) => (
           <div key={label} className="bg-white rounded-xl shadow-card border border-gray-100"
             style={{ padding: '20px 22px' }}>
@@ -109,10 +109,10 @@ export function Dashboard() {
       </div>
 
       {/* ── Charts ────────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-5 gap-4 mb-7">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-7">
 
         {/* Ranking bar */}
-        <div className="col-span-3 bg-white rounded-xl p-6 shadow-card border border-gray-100">
+        <div className="lg:col-span-3 bg-white rounded-xl p-6 shadow-card border border-gray-100">
           <div className="flex items-center justify-between mb-5">
             <span style={{ fontSize: 13, fontWeight: 700, color: '#161616', letterSpacing: '-0.01em' }}>
               Ranking Geral
@@ -142,7 +142,7 @@ export function Dashboard() {
         </div>
 
         {/* Radar top 4 */}
-        <div className="col-span-2 bg-white rounded-xl p-6 shadow-card border border-gray-100">
+        <div className="lg:col-span-2 bg-white rounded-xl p-6 shadow-card border border-gray-100">
           <span style={{ fontSize: 13, fontWeight: 700, color: '#161616', letterSpacing: '-0.01em', display: 'block', marginBottom: 16 }}>
             Top 4 — Perfil Comparativo
           </span>
@@ -170,7 +170,7 @@ export function Dashboard() {
       </div>
 
       {/* ── Insights ──────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-3 gap-4 mb-7">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-7">
 
         {/* Médias por dimensão */}
         <div className="bg-white rounded-xl p-6 shadow-card border border-gray-100">
@@ -251,7 +251,7 @@ export function Dashboard() {
           </Link>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full" style={{ fontSize: 12 }}>
+          <table className="w-full min-w-[640px]" style={{ fontSize: 12 }}>
             <thead>
               <tr style={{ borderBottom: '1px solid #f3f4f6', background: '#fafafa' }}>
                 <th className="text-left px-6 py-3" style={{ color: '#999', fontWeight: 600, fontSize: 11 }}>#</th>

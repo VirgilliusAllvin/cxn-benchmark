@@ -52,7 +52,7 @@ export function Banks() {
   ];
 
   return (
-    <div className="p-8 animate-fade-in">
+    <div className="p-4 md:p-8 animate-fade-in">
       <PageHeader
         title="Bancos"
         subtitle={`${bankList.length} banco${bankList.length !== 1 ? 's' : ''} em análise`}
@@ -70,7 +70,7 @@ export function Banks() {
 
       {/* Filters */}
       <div className="flex items-center gap-4 mb-6 flex-wrap">
-        <div className="relative flex-1 max-w-xs">
+        <div className="relative flex-1 w-full sm:max-w-xs">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-gray" />
           <input
             type="text"
@@ -97,7 +97,7 @@ export function Banks() {
       </div>
 
       {/* Grid */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {filtered.map(b => {
           const bank = bankList.find(bk => bk.id === b.id)!;
           const bData = state.banks[b.id];

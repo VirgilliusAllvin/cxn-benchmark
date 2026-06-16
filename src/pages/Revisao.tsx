@@ -85,7 +85,7 @@ export function Revisao() {
   }
 
   return (
-    <div className="p-8 animate-fade-in">
+    <div className="p-4 md:p-8 animate-fade-in">
       <PageHeader
         title="Fila de Revisão"
         subtitle={`${pendingCount} avaliação${pendingCount !== 1 ? 'ões' : ''} pendente${pendingCount !== 1 ? 's' : ''}`}

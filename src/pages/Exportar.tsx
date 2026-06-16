@@ -132,11 +132,11 @@ export function Exportar() {
   ];
 
   return (
-    <div className="p-8 animate-fade-in">
+    <div className="p-4 md:p-8 animate-fade-in">
       <PageHeader title="Exportar" subtitle="Exporte os dados em formato CSV para Excel ou análise externa" />
 
       {/* Main exports */}
-      <div className="grid grid-cols-2 gap-5 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
         {EXPORT_CARDS.map(({ key, title, description, icon: Icon, action }) => (
           <div key={key} className="bg-white rounded-2xl p-6 shadow-card border border-gray-100">
             <div className="flex items-start gap-4 mb-5">
@@ -168,7 +168,7 @@ export function Exportar() {
           <h2 className="text-sm font-bold font-display text-brand-black">Scorecard por Banco</h2>
           <p className="text-xs text-brand-gray mt-1">Descarregue o ficheiro detalhado de cada banco individualmente.</p>
         </div>
-        <div className="grid grid-cols-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
           {bankList.map(bank => {
             const k = `bank-${bank.id}`;
             const isDone = done === k;

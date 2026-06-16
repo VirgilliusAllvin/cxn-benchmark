@@ -17,7 +17,7 @@ export interface Evidence {
   id: string;
   evaluationId: string;
   criterionId: string;
-  type: 'link' | 'note';
+  type: 'link' | 'note' | 'image';
   content: string;
   description: string;
   collectedAt: string;   // ISO

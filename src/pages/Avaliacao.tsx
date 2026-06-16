@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   CheckCircle, ChevronDown, ChevronUp, Link2, FileText,
-  Plus, X, Save, Send, AlertTriangle, Lock,
+  Plus, X, Save, Send, AlertTriangle, Lock, Image as ImageIcon,
 } from 'lucide-react';
 import { DIMENSIONS, CRITERIA_BY_DIMENSION, SCORE_LABELS, TAGS, TAG_COLORS } from '../lib/data';
 import { useStore } from '../lib/store';
+import { uploadEvidenceImage } from '../lib/db';
 import { evaluatedCriterionCount, globalScore100, dimensionScore } from '../lib/calculations';
 import { PageHeader } from '../components/PageHeader';
 import { Score100Badge } from '../components/ScoreBadge';
@@ -36,8 +37,9 @@ export function Avaliacao() {
   const [submitting, setSubmitting] = useState(false);
   const [startingEval, setStartingEval] = useState(false);
   const [pendingEvidence, setPendingEvidence] = useState<Record<string, {
-    type: 'link' | 'note'; content: string; description: string; tags: Tag[]
+    type: 'link' | 'note' | 'image'; content: string; description: string; tags: Tag[]; file?: File
   }>>({});
+  const [uploading, setUploading] = useState<Record<string, boolean>>({});
 
   // Encontrar avaliação activa para o banco seleccionado
   const evaluation = state.evaluations.find(e => e.bankId === selectedBank);
@@ -105,12 +107,29 @@ export function Avaliacao() {
 
   async function submitEvidence(criterionId: string) {
     const ev = pendingEvidence[criterionId];
-    if (!ev || !ev.content.trim()) return;
+    if (!ev) return;
+    // Imagem precisa de ficheiro; link/nota precisam de conteúdo
+    if (ev.type === 'image' ? !ev.file : !ev.content.trim()) return;
     const eid = await ensureEvaluation();
     if (!eid) return;
+
+    let content = ev.content.trim();
+    if (ev.type === 'image' && ev.file) {
+      setUploading(u => ({ ...u, [criterionId]: true }));
+      try {
+        content = await uploadEvidenceImage(ev.file);
+      } catch (err) {
+        console.error('[Avaliacao] Erro ao carregar imagem:', err);
+        setUploading(u => { const n = { ...u }; delete n[criterionId]; return n; });
+        alert('Não foi possível carregar a imagem. Tenta novamente.');
+        return;
+      }
+      setUploading(u => { const n = { ...u }; delete n[criterionId]; return n; });
+    }
+
     await addEvidence(eid, criterionId, {
       type: ev.type,
-      content: ev.content.trim(),
+      content,
       description: ev.description.trim(),
       tags: ev.tags as string[],
     });
@@ -164,7 +183,7 @@ export function Avaliacao() {
 
   if (bankList.length === 0) {
     return (
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         <PageHeader title="Avaliação" subtitle="Nenhum banco disponível" />
         <p className="text-brand-gray text-sm mt-4">
           Não existem bancos configurados. Contacte o gestor.
@@ -176,7 +195,7 @@ export function Avaliacao() {
   const bankInfo = bankList.find(b => b.id === selectedBank);
 
   return (
-    <div className="p-8 animate-fade-in">
+    <div className="p-4 md:p-8 animate-fade-in">
       <PageHeader
         title="Avaliação"
         subtitle={bankInfo ? `${bankInfo.shortName} — ${bankInfo.name}` : 'Inserção de scores por critério'}
@@ -235,7 +254,7 @@ export function Avaliacao() {
           <div className="shrink-0">
             <div className="text-xs font-bold text-brand-dark mb-2">Progresso</div>
             <div className="flex items-center gap-3">
-              <div className="w-48 h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div className="w-full sm:w-48 h-2 bg-gray-100 rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all duration-500"
                   style={{
@@ -325,9 +344,9 @@ export function Avaliacao() {
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-12 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
                           {/* Score selector */}
-                          <div className="col-span-5">
+                          <div className="md:col-span-5">
                             <label className="text-xs font-bold text-brand-dark mb-2 block">
                               {isBinary ? 'Resposta' : 'Score (1–5)'}
                             </label>
@@ -399,7 +418,7 @@ export function Avaliacao() {
                           </div>
 
                           {/* Device */}
-                          <div className="col-span-2">
+                          <div className="md:col-span-2">
                             <label className="text-xs font-bold text-brand-dark mb-2 block">Dispositivo</label>
                             <select
                               disabled={isLocked}
@@ -413,7 +432,7 @@ export function Avaliacao() {
                           </div>
 
                           {/* Observations */}
-                          <div className="col-span-5">
+                          <div className="md:col-span-5">
                             <label className="text-xs font-bold text-brand-dark mb-2 block">Observações</label>
                             <textarea
                               disabled={isLocked}
@@ -432,8 +451,18 @@ export function Avaliacao() {
                             <div className="flex flex-wrap gap-2 mb-3">
                               {cs!.evidences.map(ev => (
                                 <div key={ev.id} className="flex items-center gap-1.5 text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-gray-50">
-                                  {ev.type === 'link' ? <Link2 size={10} className="text-brand-blue" /> : <FileText size={10} className="text-brand-gray" />}
-                                  <span className="max-w-[160px] truncate text-brand-dark">{ev.content}</span>
+                                  {ev.type === 'image'
+                                    ? <ImageIcon size={10} className="text-violet-500" />
+                                    : ev.type === 'link'
+                                      ? <Link2 size={10} className="text-brand-blue" />
+                                      : <FileText size={10} className="text-brand-gray" />}
+                                  {ev.type === 'image' ? (
+                                    <a href={ev.content} target="_blank" rel="noopener noreferrer">
+                                      <img src={ev.content} alt="evidência" className="h-8 w-8 object-cover rounded" />
+                                    </a>
+                                  ) : (
+                                    <span className="max-w-[160px] truncate text-brand-dark">{ev.content}</span>
+                                  )}
                                   {ev.tags.map(tag => (
                                     <span key={tag} className="text-[9px] px-1 py-0.5 rounded" style={{ background: TAG_COLORS[tag as Tag]?.bg, color: TAG_COLORS[tag as Tag]?.text }}>{tag}</span>
                                   ))}
@@ -450,26 +479,51 @@ export function Avaliacao() {
                           {!isLocked && (
                             pending ? (
                               <div className="border border-gray-200 rounded-xl p-4 bg-gray-50/50">
-                                <div className="flex gap-2 mb-3">
-                                  {(['link', 'note'] as const).map(t => (
+                                <div className="flex flex-wrap gap-2 mb-3">
+                                  {(['link', 'note', 'image'] as const).map(t => (
                                     <button
                                       key={t}
-                                      onClick={() => setPendingEvidence(p => ({ ...p, [criterion.id]: { ...p[criterion.id], type: t } }))}
+                                      onClick={() => setPendingEvidence(p => ({ ...p, [criterion.id]: { ...p[criterion.id], type: t, content: '', file: undefined } }))}
                                       className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg font-medium transition-all ${
                                         pending.type === t ? 'bg-brand-blue text-white' : 'bg-white border border-gray-200 text-brand-dark'
                                       }`}
                                     >
-                                      {t === 'link' ? <><Link2 size={10} /> Link</> : <><FileText size={10} /> Nota</>}
+                                      {t === 'link'
+                                        ? <><Link2 size={10} /> Link</>
+                                        : t === 'note'
+                                          ? <><FileText size={10} /> Nota</>
+                                          : <><ImageIcon size={10} /> Imagem</>}
                                     </button>
                                   ))}
                                 </div>
-                                <input
-                                  type={pending.type === 'link' ? 'url' : 'text'}
-                                  placeholder={pending.type === 'link' ? 'https://...' : 'Descreva a evidência...'}
-                                  value={pending.content}
-                                  onChange={e => setPendingEvidence(p => ({ ...p, [criterion.id]: { ...p[criterion.id], content: e.target.value } }))}
-                                  className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 mb-2 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue transition-all"
-                                />
+                                {pending.type === 'image' ? (
+                                  <div className="mb-2">
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      onChange={e => {
+                                        const file = e.target.files?.[0];
+                                        setPendingEvidence(p => ({ ...p, [criterion.id]: { ...p[criterion.id], file, content: file?.name ?? '' } }));
+                                      }}
+                                      className="w-full text-xs file:mr-3 file:rounded-lg file:border-0 file:bg-brand-blue file:text-white file:px-3 file:py-1.5 file:text-xs file:font-medium text-brand-gray"
+                                    />
+                                    {pending.file && (
+                                      <img
+                                        src={URL.createObjectURL(pending.file)}
+                                        alt="pré-visualização"
+                                        className="mt-2 h-24 rounded-lg object-cover border border-gray-200"
+                                      />
+                                    )}
+                                  </div>
+                                ) : (
+                                  <input
+                                    type={pending.type === 'link' ? 'url' : 'text'}
+                                    placeholder={pending.type === 'link' ? 'https://...' : 'Descreva a evidência...'}
+                                    value={pending.content}
+                                    onChange={e => setPendingEvidence(p => ({ ...p, [criterion.id]: { ...p[criterion.id], content: e.target.value } }))}
+                                    className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 mb-2 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue transition-all"
+                                  />
+                                )}
                                 <input
                                   type="text"
                                   placeholder="Descrição (opcional)"
@@ -495,9 +549,12 @@ export function Avaliacao() {
                                 <div className="flex gap-2">
                                   <button
                                     onClick={() => submitEvidence(criterion.id)}
-                                    className="text-xs bg-brand-blue text-white px-3 py-1.5 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                                    disabled={uploading[criterion.id]}
+                                    className="flex items-center gap-1.5 text-xs bg-brand-blue text-white px-3 py-1.5 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                   >
-                                    Adicionar
+                                    {uploading[criterion.id]
+                                      ? <><div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /> A carregar…</>
+                                      : 'Adicionar'}
                                   </button>
                                   <button
                                     onClick={() => setPendingEvidence(p => { const n = { ...p }; delete n[criterion.id]; return n; })}

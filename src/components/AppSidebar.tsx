@@ -33,9 +33,10 @@ const ROLE_LABELS: Record<string, string> = {
 interface Props {
   collapsed: boolean;
   onToggle: () => void;
+  onNavigate?: () => void;
 }
 
-export function AppSidebar({ collapsed, onToggle }: Props) {
+export function AppSidebar({ collapsed, onToggle, onNavigate }: Props) {
   const { pathname } = useLocation();
   const { profile, signOut } = useAuth();
 
@@ -94,6 +95,7 @@ export function AppSidebar({ collapsed, onToggle }: Props) {
             <NavLink
               key={to}
               to={to}
+              onClick={onNavigate}
               title={collapsed ? label : undefined}
               className="flex items-center rounded-lg mb-0.5 transition-all"
               style={{

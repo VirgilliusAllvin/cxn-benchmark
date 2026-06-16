@@ -82,7 +82,7 @@ export function Configuracoes() {
   }
 
   return (
-    <div className="p-8 animate-fade-in">
+    <div className="p-4 md:p-8 animate-fade-in">
       <PageHeader title="Configurações" subtitle="Gerir bancos e pesos das dimensões" />
 
       {/* ── Banks section ────────────────────────────────────────────────────── */}

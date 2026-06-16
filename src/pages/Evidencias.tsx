@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link2, FileText, Trash2, Filter } from 'lucide-react';
+import { Link2, FileText, Trash2, Filter, Image as ImageIcon } from 'lucide-react';
 import { DIMENSIONS, CRITERIA, TAGS, TAG_COLORS } from '../lib/data';
 import { useStore } from '../lib/store';
 import { PageHeader } from '../components/PageHeader';
@@ -22,7 +22,7 @@ export function Evidencias() {
       criterionId: string;
       criterionName: string;
       dimId: string;
-      type: 'link' | 'note';
+      type: 'link' | 'note' | 'image';
       content: string;
       description: string;
       collectedAt: string;
@@ -61,7 +61,7 @@ export function Evidencias() {
   }), [allEvidences, filterBank, filterTag]);
 
   return (
-    <div className="p-8 animate-fade-in">
+    <div className="p-4 md:p-8 animate-fade-in">
       <PageHeader
         title="Galeria de Evidências"
         subtitle={`${allEvidences.length} evidências registadas`}
@@ -116,7 +116,7 @@ export function Evidencias() {
           <p className="text-xs text-brand-gray mt-1">Adicione evidências durante a avaliação dos bancos.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map(ev => {
             const dim = DIMENSIONS.find(d => d.id === ev.dimId);
             return (
@@ -152,14 +152,20 @@ export function Evidencias() {
                 {/* Content */}
                 <div className="mb-2">
                   <div className="flex items-center gap-1.5 mb-1">
-                    {ev.type === 'link'
-                      ? <Link2 size={11} className="text-brand-blue shrink-0" />
-                      : <FileText size={11} className="text-brand-gray shrink-0" />}
+                    {ev.type === 'image'
+                      ? <ImageIcon size={11} className="text-violet-500 shrink-0" />
+                      : ev.type === 'link'
+                        ? <Link2 size={11} className="text-brand-blue shrink-0" />
+                        : <FileText size={11} className="text-brand-gray shrink-0" />}
                     <span className="text-[10px] font-medium text-brand-gray uppercase tracking-wide">
-                      {ev.type === 'link' ? 'Link' : 'Nota'}
+                      {ev.type === 'link' ? 'Link' : ev.type === 'image' ? 'Imagem' : 'Nota'}
                     </span>
                   </div>
-                  {ev.type === 'link' ? (
+                  {ev.type === 'image' ? (
+                    <a href={ev.content} target="_blank" rel="noopener noreferrer">
+                      <img src={ev.content} alt="evidência" className="w-full h-32 object-cover rounded-lg border border-gray-100" />
+                    </a>
+                  ) : ev.type === 'link' ? (
                     <a href={ev.content} target="_blank" rel="noopener noreferrer"
                       className="text-xs text-brand-blue hover:underline break-all line-clamp-2">
                       {ev.content}
