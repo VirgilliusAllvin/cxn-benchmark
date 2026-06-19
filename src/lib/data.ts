@@ -82,13 +82,13 @@ export const CRITERIA: Criterion[] = [
   // D7 — Confiança e Segurança Percebida
   { id: 'C7_1', name: 'Autenticação biométrica',            dimensionId: 'D7', type: 'binary', question: 'A app suporta autenticação por biometria (impressão digital ou face ID)?',     description: 'Verificar se o login biométrico está disponível e funcional.' },
   { id: 'C7_2', name: 'Notificações de segurança',          dimensionId: 'D7', type: 'scalar', question: 'Quão eficazes são as notificações para movimentos e alertas de segurança?',    description: 'Avaliar a qualidade, relevância e configurabilidade das notificações push.' },
-  { id: 'C7_3', name: 'Limites visíveis e configuráveis',   dimensionId: 'D7', type: 'scalar', question: 'Os limites de transferência/pagamento são visíveis e configuráveis pelo utilizador?', description: 'Verificar se o cliente pode consultar e ajustar os seus próprios limites.' },
+  { id: 'C7_3', name: 'Limites visíveis e configuráveis',   dimensionId: 'D7', type: 'binary', question: 'Os limites de transferência/pagamento são visíveis e configuráveis pelo utilizador?', description: 'Verificar se o cliente pode consultar e ajustar os seus próprios limites.' },
   { id: 'C7_4', name: '2FA para operações sensíveis',       dimensionId: 'D7', type: 'binary', question: 'A app exige segundo factor de autenticação para operações de elevado valor?',   description: 'Testar se existe confirmação adicional (SMS, PIN, biometria) em transferências ou alterações de dados.' },
 
   // D8 — Performance e Estabilidade
   { id: 'C8_1', name: 'Velocidade de carregamento',         dimensionId: 'D8', type: 'scalar', question: 'Qual a velocidade geral de carregamento de ecrãs e resposta da app?',          description: 'Avaliar o tempo de arranque, transições entre ecrãs e carregamento de dados.' },
   { id: 'C8_2', name: 'Estabilidade (crashes e bugs)',      dimensionId: 'D8', type: 'scalar', question: 'Com que frequência ocorrem crashes, erros ou comportamentos inesperados?',     description: 'Registar ocorrências de erros, bloqueios e instabilidade durante a avaliação.' },
-  { id: 'C8_3', name: 'Disponibilidade do serviço',         dimensionId: 'D8', type: 'scalar', question: 'O serviço esteve sempre disponível durante o período de avaliação?',           description: 'Verificar se houve indisponibilidade, manutenção programada ou erros de conectividade.' },
+  { id: 'C8_3', name: 'Disponibilidade do serviço',         dimensionId: 'D8', type: 'binary', question: 'O serviço esteve sempre disponível durante o período de avaliação?',           description: 'Verificar se houve indisponibilidade, manutenção programada ou erros de conectividade.' },
   { id: 'C8_4', name: 'Mensagens de erro claras',           dimensionId: 'D8', type: 'binary', question: 'Quando ocorre um erro, a mensagem apresentada é clara e orienta o utilizador?', description: 'Testar se as mensagens de erro são compreensíveis e propõem acções de resolução.' },
 ];
 
