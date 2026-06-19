@@ -37,9 +37,10 @@ export function Avaliacao() {
   const [submitting, setSubmitting] = useState(false);
   const [startingEval, setStartingEval] = useState(false);
   const [pendingEvidence, setPendingEvidence] = useState<Record<string, {
-    type: 'link' | 'note' | 'image'; content: string; description: string; tags: Tag[]; file?: File
+    type: 'link' | 'note' | 'image'; content: string; description: string; tags: Tag[]; file?: File; previewUrl?: string
   }>>({});
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
+  const [uploadError, setUploadError] = useState<Record<string, string>>({});
 
   // Encontrar avaliação activa para o banco seleccionado
   const evaluation = state.evaluations.find(e => e.bankId === selectedBank);
@@ -113,6 +114,9 @@ export function Avaliacao() {
     const eid = await ensureEvaluation();
     if (!eid) return;
 
+    // Clear any previous upload error for this criterion on each attempt
+    setUploadError(e => { const n = { ...e }; delete n[criterionId]; return n; });
+
     let content = ev.content.trim();
     if (ev.type === 'image' && ev.file) {
       setUploading(u => ({ ...u, [criterionId]: true }));
@@ -121,7 +125,7 @@ export function Avaliacao() {
       } catch (err) {
         console.error('[Avaliacao] Erro ao carregar imagem:', err);
         setUploading(u => { const n = { ...u }; delete n[criterionId]; return n; });
-        alert('Não foi possível carregar a imagem. Tenta novamente.');
+        setUploadError(e => ({ ...e, [criterionId]: 'Não foi possível carregar a imagem. Tenta novamente.' }));
         return;
       }
       setUploading(u => { const n = { ...u }; delete n[criterionId]; return n; });
@@ -133,6 +137,9 @@ export function Avaliacao() {
       description: ev.description.trim(),
       tags: ev.tags as string[],
     });
+    // Revoke preview URL on successful add
+    if (ev.previewUrl) URL.revokeObjectURL(ev.previewUrl);
+    setUploadError(e => { const n = { ...e }; delete n[criterionId]; return n; });
     setPendingEvidence(p => { const n = { ...p }; delete n[criterionId]; return n; });
   }
 
@@ -483,7 +490,16 @@ export function Avaliacao() {
                                   {(['link', 'note', 'image'] as const).map(t => (
                                     <button
                                       key={t}
-                                      onClick={() => setPendingEvidence(p => ({ ...p, [criterion.id]: { ...p[criterion.id], type: t, content: '', file: undefined } }))}
+                                      onClick={() => {
+                                        setPendingEvidence(p => {
+                                          const prev = p[criterion.id];
+                                          // Revoke preview URL when switching away from image type
+                                          if (prev?.previewUrl && t !== 'image') URL.revokeObjectURL(prev.previewUrl);
+                                          return { ...p, [criterion.id]: { ...prev, type: t, content: '', file: undefined, previewUrl: t !== 'image' ? undefined : prev?.previewUrl } };
+                                        });
+                                        // Clear upload error on type switch
+                                        setUploadError(err => { const n = { ...err }; delete n[criterion.id]; return n; });
+                                      }}
                                       className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg font-medium transition-all ${
                                         pending.type === t ? 'bg-brand-blue text-white' : 'bg-white border border-gray-200 text-brand-dark'
                                       }`}
@@ -503,13 +519,21 @@ export function Avaliacao() {
                                       accept="image/*"
                                       onChange={e => {
                                         const file = e.target.files?.[0];
-                                        setPendingEvidence(p => ({ ...p, [criterion.id]: { ...p[criterion.id], file, content: file?.name ?? '' } }));
+                                        setPendingEvidence(p => {
+                                          const prev = p[criterion.id];
+                                          // Revoke previous preview URL to avoid memory leak
+                                          if (prev?.previewUrl) URL.revokeObjectURL(prev.previewUrl);
+                                          const previewUrl = file ? URL.createObjectURL(file) : undefined;
+                                          return { ...p, [criterion.id]: { ...prev, file, content: file?.name ?? '', previewUrl } };
+                                        });
+                                        // Clear upload error when user picks a new file
+                                        setUploadError(err => { const n = { ...err }; delete n[criterion.id]; return n; });
                                       }}
                                       className="w-full text-xs file:mr-3 file:rounded-lg file:border-0 file:bg-brand-blue file:text-white file:px-3 file:py-1.5 file:text-xs file:font-medium text-brand-gray"
                                     />
-                                    {pending.file && (
+                                    {pending.previewUrl && (
                                       <img
-                                        src={URL.createObjectURL(pending.file)}
+                                        src={pending.previewUrl}
                                         alt="pré-visualização"
                                         className="mt-2 h-24 rounded-lg object-cover border border-gray-200"
                                       />
@@ -546,6 +570,9 @@ export function Avaliacao() {
                                     </button>
                                   ))}
                                 </div>
+                                {uploadError[criterion.id] && (
+                                  <p className="text-xs text-red-500 mb-2">{uploadError[criterion.id]}</p>
+                                )}
                                 <div className="flex gap-2">
                                   <button
                                     onClick={() => submitEvidence(criterion.id)}
@@ -557,7 +584,13 @@ export function Avaliacao() {
                                       : 'Adicionar'}
                                   </button>
                                   <button
-                                    onClick={() => setPendingEvidence(p => { const n = { ...p }; delete n[criterion.id]; return n; })}
+                                    onClick={() => {
+                                      // Revoke preview URL on cancel to free memory
+                                      const prev = pendingEvidence[criterion.id];
+                                      if (prev?.previewUrl) URL.revokeObjectURL(prev.previewUrl);
+                                      setUploadError(err => { const n = { ...err }; delete n[criterion.id]; return n; });
+                                      setPendingEvidence(p => { const n = { ...p }; delete n[criterion.id]; return n; });
+                                    }}
                                     className="text-xs text-brand-gray hover:text-brand-black px-2 py-1.5 transition-colors"
                                   >
                                     Cancelar
