@@ -147,20 +147,27 @@ export function useStore() {
     criterionId: string,
     patch: Partial<{ score: number; observations: string; device: string }>,
   ) => {
-    await upsertCriterionScore(evaluationId, criterionId, patch);
-    // Actualizar cache local
+    // 1) Atualização OTIMISTA da cache local — síncrona e pela ordem das teclas,
+    //    para o input refletir de imediato (evita que o texto reverta).
     const ev = _state.evaluations.find(e => e.id === evaluationId);
-    if (!ev) return;
-    const updatedEv: Evaluation = {
-      ...ev,
-      updatedAt: new Date().toISOString(),
-      criterionScores: {
-        ...ev.criterionScores,
-        [criterionId]: { ...(ev.criterionScores[criterionId] ?? { score: 0, observations: '', device: '', evidences: [] }), ...patch },
-      },
-    };
-    const evaluations = _state.evaluations.map(e => e.id === evaluationId ? updatedEv : e);
-    commit({ evaluations, banks: { ..._state.banks, [ev.bankId]: evaluationToBankData(updatedEv) } });
+    if (ev) {
+      const updatedEv: Evaluation = {
+        ...ev,
+        updatedAt: new Date().toISOString(),
+        criterionScores: {
+          ...ev.criterionScores,
+          [criterionId]: { ...(ev.criterionScores[criterionId] ?? { score: 0, observations: '', device: '', evidences: [] }), ...patch },
+        },
+      };
+      const evaluations = _state.evaluations.map(e => e.id === evaluationId ? updatedEv : e);
+      commit({ evaluations, banks: { ..._state.banks, [ev.bankId]: evaluationToBankData(updatedEv) } });
+    }
+    // 2) Persistir na BD a seguir (sem bloquear o ecrã).
+    try {
+      await upsertCriterionScore(evaluationId, criterionId, patch);
+    } catch (err) {
+      console.error('[store] Erro ao guardar critério:', err);
+    }
   }, []);
 
   const addEvidence = useCallback(async (

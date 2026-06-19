@@ -77,7 +77,7 @@ export const CRITERIA: Criterion[] = [
   // D6 — Atendimento e Suporte
   { id: 'C6_1', name: 'Chat in-app ou chatbot',             dimensionId: 'D6', type: 'binary', question: 'Existe canal de chat ou chatbot integrado directamente na app?',               description: 'Verificar a disponibilidade de suporte via chat sem sair da aplicação.' },
   { id: 'C6_2', name: 'Qualidade e rapidez do suporte',     dimensionId: 'D6', type: 'scalar', question: 'Qual a qualidade e rapidez de resposta dos canais de suporte disponíveis?',    description: 'Avaliar tempo de primeira resposta, resolução e adequação da ajuda prestada.' },
-  { id: 'C6_3', name: 'FAQ e auto-atendimento digital',     dimensionId: 'D6', type: 'scalar', question: 'Existe uma secção de FAQ ou auto-atendimento clara e útil dentro da app?',     description: 'Verificar a qualidade e completude da base de conhecimento de ajuda ao utilizador.' },
+  { id: 'C6_3', name: 'FAQ e auto-atendimento digital',     dimensionId: 'D6', type: 'binary', question: 'Existe uma secção de FAQ ou auto-atendimento clara e útil dentro da app?',     description: 'Verificar a existência de uma secção de FAQ ou auto-atendimento dentro da app.' },
 
   // D7 — Confiança e Segurança Percebida
   { id: 'C7_1', name: 'Autenticação biométrica',            dimensionId: 'D7', type: 'binary', question: 'A app suporta autenticação por biometria (impressão digital ou face ID)?',     description: 'Verificar se o login biométrico está disponível e funcional.' },
