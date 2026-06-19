@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   CheckCircle, ChevronDown, ChevronUp, Link2, FileText,
@@ -41,6 +41,15 @@ export function Avaliacao() {
   }>>({});
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
   const [uploadError, setUploadError] = useState<Record<string, string>>({});
+
+  // Manter ref actualizada para revogar previewUrls abertas ao desmontar (ex.: trocar de banco)
+  const pendingEvidenceRef = useRef(pendingEvidence);
+  pendingEvidenceRef.current = pendingEvidence;
+  useEffect(() => () => {
+    Object.values(pendingEvidenceRef.current).forEach(e => {
+      if (e.previewUrl) URL.revokeObjectURL(e.previewUrl);
+    });
+  }, []);
 
   // Encontrar avaliação activa para o banco seleccionado
   const evaluation = state.evaluations.find(e => e.bankId === selectedBank);
