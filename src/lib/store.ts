@@ -197,7 +197,7 @@ export function useStore() {
       },
     };
     const evaluations = _state.evaluations.map(e => e.id === evaluationId ? updatedEv : e);
-    commit({ evaluations });
+    commit({ evaluations, banks: { ..._state.banks, [updatedEv.bankId]: evaluationToBankData(updatedEv) } });
   }, []);
 
   const removeEvidence = useCallback(async (evaluationId: string, criterionId: string, evidenceId: string) => {
@@ -214,7 +214,7 @@ export function useStore() {
       },
     };
     const evaluations = _state.evaluations.map(e => e.id === evaluationId ? updatedEv : e);
-    commit({ evaluations });
+    commit({ evaluations, banks: { ..._state.banks, [updatedEv.bankId]: evaluationToBankData(updatedEv) } });
   }, []);
 
   // ── Bank meta ────────────────────────────────────────────────────────────
