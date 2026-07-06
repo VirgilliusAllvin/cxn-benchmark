@@ -43,7 +43,7 @@ function commit(next: Partial<AppState>) {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function evaluationToBankData(ev: Evaluation): BankData {
+export function evaluationToBankData(ev: Evaluation): BankData {
   return {
     id: ev.bankId,
     status: ev.status,
@@ -56,14 +56,17 @@ function evaluationToBankData(ev: Evaluation): BankData {
 function buildBanksMap(
   bankList: Bank[],
   approvedEvals: Evaluation[],
-  myEvals: Evaluation[],
+  fallbackEvals: Evaluation[],
 ): Record<string, BankData> {
   const banks: Record<string, BankData> = {};
   bankList.forEach(bank => {
-    // Aprovada tem prioridade; se não, mostrar a própria (draft/rejected)
+    // Aprovada tem prioridade; se não, mostrar a mais recente (submitted/rejected/draft).
+    // Para o gestor, fallbackEvals = todas → permite rever avaliações submetidas.
     const approved = approvedEvals.find(e => e.bankId === bank.id);
-    const mine     = myEvals.find(e => e.bankId === bank.id);
-    const ev       = approved ?? mine;
+    const fallback = fallbackEvals
+      .filter(e => e.bankId === bank.id)
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
+    const ev       = approved ?? fallback;
     if (ev) {
       banks[bank.id] = evaluationToBankData(ev);
     } else {
@@ -96,7 +99,8 @@ export async function loadFromSupabase(isGestor: boolean): Promise<void> {
       isGestor ? fetchAllEvaluations() : Promise.resolve([]),
     ]);
 
-    const banks = buildBanksMap(bankList, approvedEvals, myEvals);
+    // Gestor: fallback = todas (para rever submetidas). Agente: fallback = as suas.
+    const banks = buildBanksMap(bankList, approvedEvals, isGestor ? allEvals : myEvals);
 
     _loading = false;
     commit({

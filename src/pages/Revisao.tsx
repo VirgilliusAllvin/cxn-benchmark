@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CheckCircle, XCircle, ChevronRight, ClipboardCheck, Clock, AlertCircle } from 'lucide-react';
 import { useStore } from '../lib/store';
-import { useSnapshot } from '../lib/store';
+import { useSnapshot, evaluationToBankData } from '../lib/store';
 import { PageHeader } from '../components/PageHeader';
 import { globalScore100, evaluatedCriterionCount } from '../lib/calculations';
 import { CRITERIA } from '../lib/data';
@@ -117,9 +117,10 @@ export function Revisao() {
         <div className="space-y-3">
           {evaluations.map(ev => {
             const bank = state.bankList.find(b => b.id === ev.bankId);
-            const bData = state.banks[ev.bankId];
-            const score = bData ? globalScore100(bData, state.dimensionWeights) : 0;
-            const evaluated = bData ? evaluatedCriterionCount(bData) : 0;
+            // Calcular a partir da própria avaliação (não do mapa banks, que só tem aprovadas)
+            const bData = evaluationToBankData(ev);
+            const score = globalScore100(bData, state.dimensionWeights);
+            const evaluated = evaluatedCriterionCount(bData);
             const cfg = STATUS_CONFIG[ev.status] ?? STATUS_CONFIG.draft;
             const StatusIcon = cfg.icon;
             const updatedDate = new Date(ev.updatedAt).toLocaleDateString('pt-AO', {
