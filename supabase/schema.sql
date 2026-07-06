@@ -87,6 +87,10 @@ create policy "Gestor vê todas as avaliações"
     exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'gestor')
   );
 
+-- Benchmark partilhado: todos os autenticados veem as avaliações APROVADAS
+create policy "Todos leem avaliações aprovadas"
+  on evaluations for select using (status = 'approved');
+
 -- Agente cria avaliações para si próprio
 create policy "Agente cria avaliação"
   on evaluations for insert with check (agente_id = auth.uid());
@@ -127,6 +131,11 @@ create policy "Gestor lê todos os scores"
     exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'gestor')
   );
 
+create policy "Todos leem scores de avaliações aprovadas"
+  on criterion_scores for select using (
+    exists (select 1 from evaluations e where e.id = evaluation_id and e.status = 'approved')
+  );
+
 create policy "Agente escreve scores em avaliação draft/rejected"
   on criterion_scores for all using (
     exists (
@@ -163,6 +172,11 @@ create policy "Agente lê evidências da sua avaliação"
 create policy "Gestor lê todas as evidências"
   on evidences for select using (
     exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'gestor')
+  );
+
+create policy "Todos leem evidências de avaliações aprovadas"
+  on evidences for select using (
+    exists (select 1 from evaluations e where e.id = evaluation_id and e.status = 'approved')
   );
 
 create policy "Agente escreve evidências em avaliação draft/rejected"
