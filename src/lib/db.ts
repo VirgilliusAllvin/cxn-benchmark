@@ -29,6 +29,7 @@ interface DbCriterionScore {
   score: number;
   observations: string;
   device: string;
+  answered: boolean | null;
 }
 
 interface DbEvidence {
@@ -68,6 +69,8 @@ function mapEvaluation(
       score: s.score,
       observations: s.observations,
       device: s.device,
+      // Retrocompat: linhas antigas sem a coluna → respondido se score>0
+      answered: s.answered ?? s.score > 0,
       evidences: evidences.filter(e => e.criterion_id === s.criterion_id).map(mapEvidence),
     };
   });
@@ -233,7 +236,7 @@ export async function createEvaluation(bankId: string): Promise<Evaluation | nul
 export async function upsertCriterionScore(
   evaluationId: string,
   criterionId: string,
-  patch: Partial<{ score: number; observations: string; device: string }>,
+  patch: Partial<{ score: number; observations: string; device: string; answered: boolean }>,
 ): Promise<void> {
   const { error } = await supabase.from('criterion_scores').upsert(
     { evaluation_id: evaluationId, criterion_id: criterionId, updated_at: new Date().toISOString(), ...patch },

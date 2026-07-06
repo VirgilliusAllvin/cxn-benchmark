@@ -111,6 +111,7 @@ create table if not exists criterion_scores (
   score          integer default 0,
   observations   text default '',
   device         text default '',
+  answered       boolean not null default false,
   updated_at     timestamptz default now(),
   unique(evaluation_id, criterion_id)
 );

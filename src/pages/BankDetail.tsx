@@ -248,13 +248,15 @@ export function BankDetail() {
                             </td>
                             <td className="px-4 py-3 text-center">
                               {criterion.type === 'binary' ? (
-                                <span className={`text-xs font-bold px-2 py-0.5 rounded ${
-                                  scoreVal === 5 ? 'bg-green-50 text-green-600' :
-                                  scoreVal === 0 ? 'bg-gray-100 text-gray-400' :
-                                  'bg-red-50 text-red-500'
-                                }`}>
-                                  {scoreVal === 5 ? 'Sim' : scoreVal === 0 ? '—' : 'Não'}
-                                </span>
+                                !cs?.answered ? (
+                                  <span className="text-xs font-bold px-2 py-0.5 rounded bg-gray-100 text-gray-400">—</span>
+                                ) : (
+                                  <span className={`text-xs font-bold px-2 py-0.5 rounded ${
+                                    scoreVal === 5 ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'
+                                  }`}>
+                                    {scoreVal === 5 ? 'Sim' : 'Não'}
+                                  </span>
+                                )
                               ) : (
                                 <ScoreBadge score={scoreVal} size="sm" showLabel />
                               )}

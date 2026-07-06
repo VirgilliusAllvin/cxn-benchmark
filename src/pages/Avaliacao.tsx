@@ -10,6 +10,7 @@ import { uploadEvidenceImage } from '../lib/db';
 import { evaluatedCriterionCount, globalScore100, dimensionScore } from '../lib/calculations';
 import { PageHeader } from '../components/PageHeader';
 import { Score100Badge } from '../components/ScoreBadge';
+import { ObservationField } from '../components/ObservationField';
 import { useAuth } from '../contexts/AuthContext';
 import type { Tag } from '../lib/data';
 
@@ -83,7 +84,8 @@ export function Avaliacao() {
   async function handleScoreChange(criterionId: string, scoreVal: number) {
     const eid = await ensureEvaluation();
     if (!eid) return;
-    await updateCriterionScore(eid, criterionId, { score: scoreVal });
+    // Marcar como respondido — inclui "Não" binário (score 0)
+    await updateCriterionScore(eid, criterionId, { score: scoreVal, answered: true });
   }
 
   async function handleFieldChange(criterionId: string, field: 'observations' | 'device', value: string) {
@@ -304,7 +306,7 @@ export function Avaliacao() {
           const criteria = CRITERIA_BY_DIMENSION[dim.id] ?? [];
           const expanded = expandedDims.has(dim.id);
           const dimSc = bData ? dimensionScore(bData, dim.id) : 0;
-          const dimEvaluated = criteria.filter(c => (bData?.criterionScores[c.id]?.score ?? 0) > 0).length;
+          const dimEvaluated = criteria.filter(c => bData?.criterionScores[c.id]?.answered).length;
           const weight = state.dimensionWeights[dim.id] ?? 0;
 
           return (
@@ -375,7 +377,7 @@ export function Avaliacao() {
                                   className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all border-2 ${
                                     isLocked ? 'cursor-not-allowed' : ''
                                   } ${
-                                    scoreVal === 0
+                                    cs?.answered && scoreVal === 0
                                       ? 'border-red-400 bg-red-50 text-red-600 shadow-sm'
                                       : 'border-gray-200 bg-gray-50 text-brand-gray hover:border-red-200 hover:bg-red-50/50'
                                   }`}
@@ -423,8 +425,8 @@ export function Avaliacao() {
                               </div>
                             )}
 
-                            {scoreVal > 0 && (
-                              <div className="text-xs mt-1.5 font-medium" style={{ color: SCORE_LABELS[Math.min(scoreVal, 5)].color }}>
+                            {((isBinary && cs?.answered) || (!isBinary && scoreVal > 0)) && (
+                              <div className="text-xs mt-1.5 font-medium" style={{ color: isBinary ? (scoreVal === 5 ? '#16a34a' : '#dc2626') : SCORE_LABELS[scoreVal]?.color }}>
                                 {isBinary
                                   ? (scoreVal === 5 ? 'Sim — Funcionalidade presente' : 'Não — Funcionalidade ausente')
                                   : SCORE_LABELS[scoreVal]?.label
@@ -450,12 +452,12 @@ export function Avaliacao() {
                           {/* Observations */}
                           <div className="md:col-span-5">
                             <label className="text-xs font-bold text-brand-dark mb-2 block">Observações</label>
-                            <textarea
+                            <ObservationField
+                              key={`${selectedBank}-${criterion.id}`}
+                              initial={cs?.observations ?? ''}
                               disabled={isLocked}
-                              rows={2}
-                              value={cs?.observations ?? ''}
-                              onChange={e => handleFieldChange(criterion.id, 'observations', e.target.value)}
                               placeholder={isLocked ? '' : 'Detalhe o que observou...'}
+                              onChange={v => handleFieldChange(criterion.id, 'observations', v)}
                               className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue transition-all placeholder-brand-gray disabled:bg-gray-50 disabled:cursor-not-allowed"
                             />
                           </div>

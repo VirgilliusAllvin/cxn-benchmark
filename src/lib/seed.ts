@@ -6,14 +6,14 @@ import type { BankData, CriterionScore } from './types';
 import { CRITERIA } from './data';
 
 function mkScore(score: number, obs = '', device = 'Android'): CriterionScore {
-  return { score, observations: obs, device, evidences: [] };
+  return { score, observations: obs, device, answered: true, evidences: [] };
 }
 
 /** Build a full criterionScores map from a partial map — missing keys get score 0 */
 function buildScores(partial: Record<string, CriterionScore>): Record<string, CriterionScore> {
   const base: Record<string, CriterionScore> = {};
   CRITERIA.forEach(c => {
-    base[c.id] = partial[c.id] ?? { score: 0, observations: '', device: '', evidences: [] };
+    base[c.id] = partial[c.id] ?? { score: 0, observations: '', device: '', answered: false, evidences: [] };
   });
   return base;
 }

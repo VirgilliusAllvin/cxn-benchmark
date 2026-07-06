@@ -30,6 +30,7 @@ export interface CriterionScore {
   score: number;         // binary: 0 or 5; scalar: 0 (not evaluated) or 1–5
   observations: string;
   device: string;
+  answered: boolean;     // distingue "respondeu Não (0)" de "ainda não respondeu"
   evidences: Evidence[];
 }
 

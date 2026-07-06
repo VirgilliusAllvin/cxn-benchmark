@@ -73,7 +73,7 @@ function buildBanksMap(
         notes: '',
         updatedAt: '',
         criterionScores: CRITERIA.reduce((acc, c) => {
-          acc[c.id] = { score: 0, observations: '', device: '', evidences: [] };
+          acc[c.id] = { score: 0, observations: '', device: '', answered: false, evidences: [] };
           return acc;
         }, {} as BankData['criterionScores']),
       };
@@ -145,7 +145,7 @@ export function useStore() {
   const updateCriterionScore = useCallback(async (
     evaluationId: string,
     criterionId: string,
-    patch: Partial<{ score: number; observations: string; device: string }>,
+    patch: Partial<{ score: number; observations: string; device: string; answered: boolean }>,
   ) => {
     // 1) Atualização OTIMISTA da cache local — síncrona e pela ordem das teclas,
     //    para o input refletir de imediato (evita que o texto reverta).
@@ -156,7 +156,7 @@ export function useStore() {
         updatedAt: new Date().toISOString(),
         criterionScores: {
           ...ev.criterionScores,
-          [criterionId]: { ...(ev.criterionScores[criterionId] ?? { score: 0, observations: '', device: '', evidences: [] }), ...patch },
+          [criterionId]: { ...(ev.criterionScores[criterionId] ?? { score: 0, observations: '', device: '', answered: false, evidences: [] }), ...patch },
         },
       };
       const evaluations = _state.evaluations.map(e => e.id === evaluationId ? updatedEv : e);
@@ -178,7 +178,7 @@ export function useStore() {
     const id = await insertEvidence(evaluationId, criterionId, ev);
     const evaluation = _state.evaluations.find(e => e.id === evaluationId);
     if (!evaluation) return;
-    const cs = evaluation.criterionScores[criterionId] ?? { score: 0, observations: '', device: '', evidences: [] };
+    const cs = evaluation.criterionScores[criterionId] ?? { score: 0, observations: '', device: '', answered: false, evidences: [] };
     const newEvidence = {
       id,
       evaluationId,
@@ -282,7 +282,7 @@ export function useStore() {
     const banks = { ..._state.banks, [bank.id]: {
       id: bank.id, status: 'draft' as EvaluationStatus, notes: '', updatedAt: '',
       criterionScores: CRITERIA.reduce((acc, c) => {
-        acc[c.id] = { score: 0, observations: '', device: '', evidences: [] };
+        acc[c.id] = { score: 0, observations: '', device: '', answered: false, evidences: [] };
         return acc;
       }, {} as BankData['criterionScores']),
     }};

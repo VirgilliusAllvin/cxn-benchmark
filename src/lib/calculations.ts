@@ -1,13 +1,16 @@
 import { DIMENSIONS, CRITERIA, CRITERIA_BY_DIMENSION, DEFAULT_DIMENSION_WEIGHTS } from './data';
 import type { BankData } from './types';
 
-// Average score for a dimension (0–5), excluding unevaluated criteria (score=0)
+// Average score for a dimension (0–5), including only answered criteria.
+// Um critério binário respondido "Não" (score 0) É considerado respondido e
+// entra na média como 0 (penaliza). Critérios não respondidos são excluídos.
 export function dimensionScore(bankData: BankData, dimensionId: string): number {
   const criteria = CRITERIA_BY_DIMENSION[dimensionId] ?? [];
   if (criteria.length === 0) return 0;
   const scores = criteria
-    .map(c => bankData.criterionScores?.[c.id]?.score ?? 0)
-    .filter(s => s > 0); // 0 = not evaluated → excluded from average
+    .map(c => bankData.criterionScores?.[c.id])
+    .filter((cs): cs is NonNullable<typeof cs> => !!cs?.answered)
+    .map(cs => cs.score);
   if (scores.length === 0) return 0;
   return scores.reduce((a, b) => a + b, 0) / scores.length;
 }
@@ -31,9 +34,9 @@ export function globalScore100(
   return Math.round(globalScore5(bankData, dimensionWeights) * 20 * 10) / 10;
 }
 
-// Number of criteria with score > 0
+// Number of criteria answered (inclui "Não" binário)
 export function evaluatedCriterionCount(bankData: BankData): number {
-  return CRITERIA.filter(c => (bankData.criterionScores?.[c.id]?.score ?? 0) > 0).length;
+  return CRITERIA.filter(c => bankData.criterionScores?.[c.id]?.answered).length;
 }
 
 // Evidence count
