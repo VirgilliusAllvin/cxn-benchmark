@@ -1,13 +1,15 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Trophy, Medal, Award, ChevronRight } from 'lucide-react';
-import { useSnapshot } from '../lib/store';
+import { useStore } from '../lib/store';
 import { rankBanks } from '../lib/calculations';
 import { PageHeader } from '../components/PageHeader';
 import { Score100Badge } from '../components/ScoreBadge';
+import { useAuth } from '../contexts/AuthContext';
 
 export function Ranking() {
-  const state = useSnapshot();
+  const { state, selectCycle } = useStore();
+  const { profile } = useAuth();
   const bankList = state.bankList;
 
   // Apenas avaliações aprovadas entram no ranking
@@ -35,6 +37,21 @@ export function Ranking() {
       <PageHeader
         title="Ranking Geral"
         subtitle={`${withScores.length} banco${withScores.length !== 1 ? 's' : ''} aprovado${withScores.length !== 1 ? 's' : ''} de ${bankList.length} no total`}
+        actions={
+          <select
+            value={state.activeCycleId ?? ''}
+            onChange={async (e) => {
+              await selectCycle(e.target.value, profile?.role === 'gestor');
+            }}
+            className="text-xs border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/20"
+          >
+            {state.cycles.map(c => (
+              <option key={c.id} value={c.id}>
+                {c.name} {c.status === 'open' ? '(activo)' : ''}
+              </option>
+            ))}
+          </select>
+        }
       />
 
       {withScores.length === 0 && (

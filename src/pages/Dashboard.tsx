@@ -5,11 +5,12 @@ import {
 } from 'recharts';
 import { Trophy, TrendingUp, Building2, AlertTriangle, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { useSnapshot } from '../lib/store';
+import { useStore } from '../lib/store';
 import { DIMENSIONS } from '../lib/data';
 import { dimensionScore, marketDimensionAvg, rankBanks } from '../lib/calculations';
 import { PageHeader } from '../components/PageHeader';
 import { Score100Badge } from '../components/ScoreBadge';
+import { useAuth } from '../contexts/AuthContext';
 
 const RADAR_COLORS = ['#1818db', '#1ddbb1', '#f59e0b', '#494949'];
 
@@ -23,7 +24,8 @@ function sc(v: number) {
 }
 
 export function Dashboard() {
-  const state = useSnapshot();
+  const { state, selectCycle } = useStore();
+  const { profile } = useAuth();
 
   const bankList = state.bankList;
 
@@ -83,6 +85,21 @@ export function Dashboard() {
       <PageHeader
         title="Dashboard"
         subtitle="Visão geral do benchmarking da banca digital em Angola"
+        actions={
+          <select
+            value={state.activeCycleId ?? ''}
+            onChange={async (e) => {
+              await selectCycle(e.target.value, profile?.role === 'gestor');
+            }}
+            className="text-xs border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/20"
+          >
+            {state.cycles.map(c => (
+              <option key={c.id} value={c.id}>
+                {c.name} {c.status === 'open' ? '(activo)' : ''}
+              </option>
+            ))}
+          </select>
+        }
       />
 
       {/* ── KPIs ──────────────────────────────────────────────────────────── */}
