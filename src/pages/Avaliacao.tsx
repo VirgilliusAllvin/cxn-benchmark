@@ -64,7 +64,7 @@ export function Avaliacao() {
   const isAgente = profile?.role === 'agente';
   const isGestor = profile?.role === 'gestor';
   const canEdit = isGestor || !evalStatus
-    || ((evalStatus === 'draft' || evalStatus === 'rejected') && evaluation?.agenteId === profile?.id);
+    || ((evalStatus === 'draft' || evalStatus === 'rejected') && bankStatus(selectedBank) === 'mine');
   const isLocked = !canEdit;
 
   useEffect(() => {
@@ -103,7 +103,7 @@ export function Avaliacao() {
   async function ensureEvaluation() {
     if (!activeCycleId) return null;
     const status = bankStatus(selectedBank);
-    if (status === 'taken' || status === 'submitted' || status === 'approved') return null;
+    if (!isGestor && (status === 'taken' || status === 'submitted' || status === 'approved')) return null;
     if (evaluationId) return evaluationId;
     setStartingEval(true);
     const ev = await startEvaluation(selectedBank);
@@ -310,18 +310,12 @@ export function Avaliacao() {
               })}
             </select>
             {(() => {
-              const currentStatus = bankStatus(selectedBank);
-              if (currentStatus === 'available' || currentStatus === 'mine') return null;
-              const BADGE: Record<string, { bg: string; label: string }> = {
-                taken: { bg: 'bg-red-50 text-red-600', label: 'Em avaliação por outro agente' },
-                submitted: { bg: 'bg-amber-50 text-amber-700', label: 'Submetido para revisão' },
-                approved: { bg: 'bg-green-50 text-green-700', label: 'Aprovado' },
-              };
-              const b = BADGE[currentStatus];
+              if (bankStatus(selectedBank) !== 'taken') return null;
+              const badgeInfo = { bg: 'bg-red-50 text-red-600', label: 'Em avaliação por outro agente' };
               return (
-                <div className={`mt-2 inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-1 rounded-lg ${b.bg}`}>
+                <div className={`mt-2 inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-1 rounded-lg ${badgeInfo.bg}`}>
                   <AlertTriangle size={11} />
-                  {b.label}
+                  {badgeInfo.label}
                 </div>
               );
             })()}
