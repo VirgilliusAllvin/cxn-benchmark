@@ -53,6 +53,23 @@ interface DbEvaluationCycle {
   closed_at: string | null;
 }
 
+// ── RLS: escrita silenciosamente filtrada ───────────────────────────────────
+//
+// As policies RLS de escrita do agente (evaluations/criterion_scores/evidences)
+// exigem `evaluation_cycles.status = 'open'` (entre outras condições). Quando
+// essa condição falha, o Postgres/PostgREST NÃO devolve erro — o UPDATE/DELETE
+// simplesmente não afecta nenhuma linha e `error` continua `null`. Sem verificar
+// se alguma linha foi de facto afectada, a app assume sucesso e aplica a
+// actualização optimista no estado local, ficando dessincronizada da BD
+// (perda de dados silenciosa). Todas as funções sujeitas a esta condição RLS
+// encadeiam `.select()` após o `.update()`/`.delete()` e usam este helper para
+// detectar o caso de 0 linhas afectadas.
+function assertRowsAffected(rows: unknown[] | null | undefined): void {
+  if (!rows || rows.length === 0) {
+    throw new Error('Não foi possível guardar: o ciclo pode estar fechado ou já não tem permissão para editar esta avaliação.');
+  }
+}
+
 // ── Mappers ───────────────────────────────────────────────────────────────────
 
 function mapEvidence(row: DbEvidence): Evidence {
@@ -300,11 +317,12 @@ export async function upsertCriterionScore(
   criterionId: string,
   patch: Partial<{ score: number; observations: string; device: string; answered: boolean }>,
 ): Promise<void> {
-  const { error } = await supabase.from('criterion_scores').upsert(
+  const { data, error } = await supabase.from('criterion_scores').upsert(
     { evaluation_id: evaluationId, criterion_id: criterionId, updated_at: new Date().toISOString(), ...patch },
     { onConflict: 'evaluation_id,criterion_id' },
-  );
+  ).select('id');
   if (error) throw error;
+  assertRowsAffected(data);
   await supabase.from('evaluations')
     .update({ updated_at: new Date().toISOString() })
     .eq('id', evaluationId);
@@ -342,27 +360,31 @@ export async function insertEvidence(
 }
 
 export async function deleteEvidence(evidenceId: string): Promise<void> {
-  const { error } = await supabase.from('evidences').delete().eq('id', evidenceId);
+  const { data, error } = await supabase.from('evidences').delete().eq('id', evidenceId).select('id');
   if (error) throw error;
+  assertRowsAffected(data);
 }
 
 export async function updateEvaluationNotes(evaluationId: string, notes: string): Promise<void> {
-  const { error } = await supabase.from('evaluations')
+  const { data, error } = await supabase.from('evaluations')
     .update({ notes, updated_at: new Date().toISOString() })
-    .eq('id', evaluationId);
+    .eq('id', evaluationId)
+    .select('id');
   if (error) throw error;
+  assertRowsAffected(data);
 }
 
 // ── Workflow ──────────────────────────────────────────────────────────────────
 
 export async function submitEvaluation(evaluationId: string): Promise<void> {
-  const { error } = await supabase.from('evaluations').update({
+  const { data, error } = await supabase.from('evaluations').update({
     status: 'submitted',
     submitted_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     rejection_comment: '',
-  }).eq('id', evaluationId);
+  }).eq('id', evaluationId).select('id');
   if (error) throw error;
+  assertRowsAffected(data);
 }
 
 export async function approveEvaluation(evaluationId: string): Promise<void> {
