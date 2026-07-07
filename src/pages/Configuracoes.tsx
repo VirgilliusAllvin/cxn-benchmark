@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Pencil, Trash2, Check, X, Save, RotateCcw, AlertCircle } from 'lucide-react';
+import { Plus, Pencil, Trash2, Check, X, Save, RotateCcw, AlertCircle, Calendar, Lock } from 'lucide-react';
 import { DIMENSIONS, DEFAULT_DIMENSION_WEIGHTS } from '../lib/data';
 import { useStore } from '../lib/store';
 import { PageHeader } from '../components/PageHeader';
@@ -9,8 +9,14 @@ function genId(name: string) {
 }
 
 export function Configuracoes() {
-  const { state, addBank, updateBankRecord, removeBank, updateDimensionWeights } = useStore();
+  const { state, addBank, updateBankRecord, removeBank, updateDimensionWeights, createCycle, closeCycle } = useStore();
   const bankList = state.bankList;
+
+  // ── Cycle management state ───────────────────────────────────────────────────
+  const [newCycleName, setNewCycleName] = useState('');
+  const [creatingCycle, setCreatingCycle] = useState(false);
+  const [closingCycle, setClosingCycle] = useState<string | null>(null);
+  const [cycleError, setCycleError] = useState<string | null>(null);
 
   // ── Bank editing state ───────────────────────────────────────────────────────
   const [newBankName, setNewBankName] = useState('');
@@ -31,6 +37,40 @@ export function Configuracoes() {
 
   const weightSum = Object.values(weights).reduce((s, v) => s + (Number(v) || 0), 0);
   const weightsValid = Math.round(weightSum) === 100;
+
+  // ── Cycle actions ────────────────────────────────────────────────────────────
+  async function handleCreateCycle() {
+    const name = newCycleName.trim();
+    if (!name) return;
+    const hasOpen = state.cycles.some(c => c.status === 'open');
+    if (hasOpen) return;
+    setCreatingCycle(true);
+    setCycleError(null);
+    try {
+      await createCycle(name);
+      setNewCycleName('');
+    } catch (err) {
+      console.error('[Configuracoes] Erro ao criar ciclo:', err);
+      setCycleError(err instanceof Error ? err.message : 'Não foi possível criar o ciclo. Tenta novamente.');
+    } finally {
+      setCreatingCycle(false);
+    }
+  }
+
+  async function handleCloseCycle(cycleId: string) {
+    if (closingCycle === cycleId) {
+      setCycleError(null);
+      try {
+        await closeCycle(cycleId);
+        setClosingCycle(null);
+      } catch (err) {
+        console.error('[Configuracoes] Erro ao fechar ciclo:', err);
+        setCycleError(err instanceof Error ? err.message : 'Não foi possível fechar o ciclo. Tenta novamente.');
+      }
+    } else {
+      setClosingCycle(cycleId);
+    }
+  }
 
   // ── Bank actions ─────────────────────────────────────────────────────────────
   function handleAddBank() {
@@ -84,6 +124,88 @@ export function Configuracoes() {
   return (
     <div className="p-4 md:p-8 animate-fade-in">
       <PageHeader title="Configurações" subtitle="Gerir bancos e pesos das dimensões" />
+
+      {/* ── Cycles section ──────────────────────────────────────────────── */}
+      <section className="mb-8">
+        <h2 className="text-sm font-bold text-brand-black mb-4">Ciclos de Avaliacao</h2>
+        <div className="bg-white rounded-2xl shadow-card border border-gray-100 overflow-hidden">
+          {cycleError && (
+            <div className="px-5 py-3 bg-red-50 border-b border-red-100 flex items-center gap-2">
+              <AlertCircle size={14} className="text-red-500 shrink-0" />
+              <p className="text-xs text-red-600">{cycleError}</p>
+            </div>
+          )}
+
+          {/* Create cycle form — only if no open cycle */}
+          {!state.cycles.some(c => c.status === 'open') && (
+            <div className="p-5 border-b border-gray-100 bg-gray-50/50">
+              <div className="flex items-end gap-3">
+                <div className="flex-1">
+                  <label className="block text-xs font-bold text-brand-dark mb-1.5">Novo Ciclo</label>
+                  <input
+                    type="text"
+                    value={newCycleName}
+                    onChange={e => { setNewCycleName(e.target.value); setCycleError(null); }}
+                    placeholder="ex: Benchmark Q3 2026"
+                    className="w-full text-sm border border-gray-200 rounded-xl px-4 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue transition-all"
+                    onKeyDown={e => e.key === 'Enter' && handleCreateCycle()}
+                  />
+                </div>
+                <button
+                  onClick={handleCreateCycle}
+                  disabled={!newCycleName.trim() || creatingCycle}
+                  className="flex items-center gap-2 text-sm bg-brand-blue text-white px-4 py-2.5 rounded-xl font-medium hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <Plus size={14} /> Criar Ciclo
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Cycle list */}
+          <div className="divide-y divide-gray-50">
+            {state.cycles.map(cycle => (
+              <div key={cycle.id} className="px-5 py-3 flex items-center gap-3">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                  cycle.status === 'open' ? 'bg-green-100' : 'bg-gray-100'
+                }`}>
+                  {cycle.status === 'open' ? <Calendar size={14} className="text-green-600" /> : <Lock size={14} className="text-gray-400" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-brand-black">{cycle.name}</div>
+                  <div className="text-xs text-brand-gray">
+                    {cycle.status === 'open' ? 'Aberto' : `Fechado em ${new Date(cycle.closedAt!).toLocaleDateString('pt-AO')}`}
+                    {' — '}Criado em {new Date(cycle.createdAt).toLocaleDateString('pt-AO')}
+                  </div>
+                </div>
+                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
+                  cycle.status === 'open' ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-500'
+                }`}>
+                  {cycle.status === 'open' ? 'Aberto' : 'Fechado'}
+                </span>
+                {cycle.status === 'open' && (
+                  <button
+                    onClick={() => handleCloseCycle(cycle.id)}
+                    className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
+                      closingCycle === cycle.id
+                        ? 'bg-red-500 text-white'
+                        : 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100'
+                    }`}
+                  >
+                    {closingCycle === cycle.id ? 'Confirmar fecho' : 'Fechar ciclo'}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {state.cycles.length === 0 && (
+            <div className="px-5 py-8 text-center text-sm text-brand-gray">
+              Nenhum ciclo criado. Crie o primeiro ciclo para iniciar as avaliacoes.
+            </div>
+          )}
+        </div>
+      </section>
 
       {/* ── Banks section ────────────────────────────────────────────────────── */}
       <section className="mb-8">
