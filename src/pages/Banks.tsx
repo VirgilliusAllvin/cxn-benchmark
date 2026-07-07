@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, ChevronRight, Image as ImageIcon, Calendar, ClipboardList } from 'lucide-react';
+import { Search, ChevronRight, Image as ImageIcon, Calendar, ClipboardList, AlertTriangle } from 'lucide-react';
 import { useSnapshot } from '../lib/store';
 import { rankBanks, evidenceCount } from '../lib/calculations';
 import { PageHeader } from '../components/PageHeader';
@@ -50,6 +50,19 @@ export function Banks() {
     { key: 'approved',  label: 'Aprovados' },
     { key: 'rejected',  label: 'Rejeitados' },
   ];
+
+  if (!state.activeCycleId) {
+    return (
+      <div className="p-4 md:p-8 animate-fade-in">
+        <PageHeader title="Bancos" subtitle="Bancos em análise" />
+        <div className="flex flex-col items-center justify-center py-24 text-brand-gray">
+          <AlertTriangle size={40} className="mb-4 opacity-20" />
+          <p className="text-sm font-medium">Nenhum ciclo de avaliacao aberto.</p>
+          <p className="text-xs mt-1">Contacte o gestor para abrir um novo ciclo.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 md:p-8 animate-fade-in">
@@ -106,7 +119,10 @@ export function Banks() {
             ? new Date(bData.updatedAt).toLocaleDateString('pt-AO', { day: '2-digit', month: 'short' })
             : '—';
           const statusKey = (bData?.status ?? 'draft') as EvaluationStatus;
-          const statusStyle = STATUS_STYLES[statusKey] ?? STATUS_STYLES.draft;
+          const hasEvaluation = state.evaluations.some(e => e.bankId === b.id);
+          const statusStyle = statusKey === 'draft' && !hasEvaluation
+            ? { label: 'Não iniciado', bg: 'bg-gray-100', text: 'text-gray-400' }
+            : STATUS_STYLES[statusKey] ?? STATUS_STYLES.draft;
 
           return (
             <div key={b.id} className="bg-white rounded-2xl p-5 shadow-card border border-gray-100 hover:shadow-card-hover hover:border-brand-blue/20 transition-all group flex flex-col">
