@@ -51,7 +51,8 @@ export function Banks() {
     { key: 'rejected',  label: 'Rejeitados' },
   ];
 
-  if (!state.activeCycleId) {
+  const activeCycle = state.cycles.find(c => c.id === state.activeCycleId);
+  if (!activeCycle || activeCycle.status !== 'open') {
     return (
       <div className="p-4 md:p-8 animate-fade-in">
         <PageHeader title="Bancos" subtitle="Bancos em análise" />
