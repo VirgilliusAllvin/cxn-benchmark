@@ -29,6 +29,9 @@ export function Avaliacao() {
     submitForReview,
   } = useStore();
 
+  const activeCycleId = state.activeCycleId;
+  const activeCycle = state.cycles.find(c => c.id === activeCycleId);
+
   const bankList = state.bankList;
   const firstBank = bankList[0]?.id ?? '';
 
@@ -68,13 +71,39 @@ export function Avaliacao() {
     if (p) setSelectedBank(p);
   }, [params]);
 
+  if (!activeCycle || activeCycle.status !== 'open') {
+    return (
+      <div className="p-4 md:p-8 animate-fade-in">
+        <PageHeader title="Avaliacao" subtitle="Avaliar bancos por dimensao" />
+        <div className="flex flex-col items-center justify-center py-24 text-brand-gray">
+          <AlertTriangle size={40} className="mb-4 opacity-20" />
+          <p className="text-sm font-medium">Nenhum ciclo de avaliacao aberto.</p>
+          <p className="text-xs mt-1">Contacte o gestor para abrir um novo ciclo.</p>
+        </div>
+      </div>
+    );
+  }
+
   const bData = state.banks[selectedBank];
   const evaluated = bData ? evaluatedCriterionCount(bData) : 0;
   const totalCriteria = Object.values(CRITERIA_BY_DIMENSION).reduce((s, arr) => s + arr.length, 0);
   const score = bData ? globalScore100(bData, state.dimensionWeights) : 0;
 
+  // Estado de reivindicação do banco no ciclo activo: disponível, meu, ocupado por outro agente, submetido ou aprovado
+  function bankStatus(bankId: string): 'available' | 'mine' | 'taken' | 'submitted' | 'approved' {
+    const ev = state.evaluations.find(e => e.bankId === bankId && e.cycleId === activeCycleId);
+    if (!ev) return 'available';
+    if (ev.status === 'approved') return 'approved';
+    if (ev.status === 'submitted') return 'submitted';
+    if (ev.agenteId === profile?.id) return 'mine';
+    return 'taken';
+  }
+
   async function ensureEvaluation() {
     if (evaluationId) return evaluationId;
+    if (!activeCycleId) return null;
+    const status = bankStatus(selectedBank);
+    if (status === 'taken' || status === 'submitted' || status === 'approved') return null;
     setStartingEval(true);
     const ev = await startEvaluation(selectedBank);
     setStartingEval(false);
@@ -263,10 +292,38 @@ export function Avaliacao() {
               onChange={e => setSelectedBank(e.target.value)}
               className="w-full text-sm border border-gray-200 rounded-xl px-4 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue transition-all text-brand-black"
             >
-              {bankList.map(b => (
-                <option key={b.id} value={b.id}>{b.shortName} — {b.name}</option>
-              ))}
+              {bankList.map(b => {
+                const bStatus = bankStatus(b.id);
+                const suffix = bStatus === 'taken'
+                  ? ' — em avaliação por outro agente'
+                  : bStatus === 'submitted'
+                    ? ' — submetido para revisão'
+                    : bStatus === 'approved'
+                      ? ' — aprovado'
+                      : '';
+                return (
+                  <option key={b.id} value={b.id} disabled={bStatus === 'taken'}>
+                    {b.shortName} — {b.name}{suffix}
+                  </option>
+                );
+              })}
             </select>
+            {(() => {
+              const currentStatus = bankStatus(selectedBank);
+              if (currentStatus === 'available' || currentStatus === 'mine') return null;
+              const BADGE: Record<string, { bg: string; label: string }> = {
+                taken: { bg: 'bg-red-50 text-red-600', label: 'Em avaliação por outro agente' },
+                submitted: { bg: 'bg-amber-50 text-amber-700', label: 'Submetido para revisão' },
+                approved: { bg: 'bg-green-50 text-green-700', label: 'Aprovado' },
+              };
+              const b = BADGE[currentStatus];
+              return (
+                <div className={`mt-2 inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-1 rounded-lg ${b.bg}`}>
+                  <AlertTriangle size={11} />
+                  {b.label}
+                </div>
+              );
+            })()}
           </div>
 
           <div className="shrink-0">
