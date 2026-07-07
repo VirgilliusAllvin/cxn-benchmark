@@ -63,7 +63,8 @@ export function Avaliacao() {
   // Agente só pode editar em draft ou rejected
   const isAgente = profile?.role === 'agente';
   const isGestor = profile?.role === 'gestor';
-  const canEdit = isGestor || !evalStatus || evalStatus === 'draft' || evalStatus === 'rejected';
+  const canEdit = isGestor || !evalStatus
+    || ((evalStatus === 'draft' || evalStatus === 'rejected') && evaluation?.agenteId === profile?.id);
   const isLocked = !canEdit;
 
   useEffect(() => {
@@ -100,10 +101,10 @@ export function Avaliacao() {
   }
 
   async function ensureEvaluation() {
-    if (evaluationId) return evaluationId;
     if (!activeCycleId) return null;
     const status = bankStatus(selectedBank);
     if (status === 'taken' || status === 'submitted' || status === 'approved') return null;
+    if (evaluationId) return evaluationId;
     setStartingEval(true);
     const ev = await startEvaluation(selectedBank);
     setStartingEval(false);
