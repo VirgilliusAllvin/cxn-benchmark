@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   RadarChart, Radar, PolarGrid, PolarAngleAxis, Legend, Cell,
@@ -26,6 +26,22 @@ function sc(v: number) {
 export function Dashboard() {
   const { state, selectCycle } = useStore();
   const { profile } = useAuth();
+
+  const [cycleSwitching, setCycleSwitching] = useState(false);
+  const [cycleError, setCycleError] = useState<string | null>(null);
+
+  async function handleCycleChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    setCycleSwitching(true);
+    setCycleError(null);
+    try {
+      await selectCycle(e.target.value, profile?.role === 'gestor');
+    } catch (err) {
+      setCycleError(err instanceof Error ? err.message : 'Erro ao mudar de ciclo.');
+      console.error('[cycle-select] erro:', err);
+    } finally {
+      setCycleSwitching(false);
+    }
+  }
 
   const bankList = state.bankList;
 
@@ -86,19 +102,26 @@ export function Dashboard() {
         title="Dashboard"
         subtitle="Visão geral do benchmarking da banca digital em Angola"
         actions={
-          <select
-            value={state.activeCycleId ?? ''}
-            onChange={async (e) => {
-              await selectCycle(e.target.value, profile?.role === 'gestor');
-            }}
-            className="text-xs border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/20"
-          >
-            {state.cycles.map(c => (
-              <option key={c.id} value={c.id}>
-                {c.name} {c.status === 'open' ? '(activo)' : ''}
-              </option>
-            ))}
-          </select>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <label htmlFor="dashboard-cycle-select" className="text-xs font-semibold text-brand-gray">Ciclo</label>
+              <select
+                id="dashboard-cycle-select"
+                value={state.activeCycleId ?? ''}
+                onChange={handleCycleChange}
+                disabled={cycleSwitching}
+                aria-label="Ciclo de avaliação"
+                className="text-xs border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/20 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {state.cycles.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} {c.status === 'open' ? '(activo)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {cycleError && <span className="text-[11px] text-red-600">{cycleError}</span>}
+          </div>
         }
       />
 
