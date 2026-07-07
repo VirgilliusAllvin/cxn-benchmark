@@ -11,6 +11,19 @@ export interface UserProfile {
   role: UserRole;
 }
 
+// ── Evaluation Cycle ──────────────────────────────────────────────────────────
+
+export type CycleStatus = 'open' | 'closed';
+
+export interface EvaluationCycle {
+  id: string;
+  name: string;
+  status: CycleStatus;
+  createdBy: string;
+  createdAt: string;
+  closedAt?: string;
+}
+
 // ── Evidence ──────────────────────────────────────────────────────────────────
 
 export interface Evidence {
@@ -39,6 +52,7 @@ export interface CriterionScore {
 export interface Evaluation {
   id: string;
   bankId: string;
+  cycleId: string;
   agenteId: string;
   status: EvaluationStatus;
   notes: string;
@@ -78,4 +92,6 @@ export type AppState = {
   dimensionWeights: Record<string, number>; // dimensionId → percentage (0-100)
   /** All evaluations loaded (for gestor review queue) */
   evaluations: Evaluation[];
+  cycles: EvaluationCycle[];
+  activeCycleId: string | null;
 };
