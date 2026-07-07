@@ -8,15 +8,16 @@
  * a base de dados canónica. O store local é apenas uma cache em memória.
  */
 import { useSyncExternalStore, useCallback } from 'react';
-import type { AppState, Bank, BankData, Evaluation, EvaluationStatus } from './types';
+import type { AppState, Bank, BankData, Evaluation, EvaluationCycle, EvaluationStatus } from './types';
 import { CRITERIA, DEFAULT_DIMENSION_WEIGHTS } from './data';
 import {
   fetchBanks, fetchDimensionWeights, fetchAllEvaluations,
-  fetchMyEvaluations, fetchApprovedEvaluations,
+  fetchVisibleEvaluations,
   upsertBank, deactivateBank, saveDimensionWeights,
   upsertCriterionScore, insertEvidence, deleteEvidence,
   updateEvaluationNotes, submitEvaluation, approveEvaluation,
   rejectEvaluation, createEvaluation,
+  fetchCycles, createCycleDb, closeCycleDb,
 } from './db';
 
 // ── Estado inicial (vazio até carregar do Supabase) ───────────────────────────
@@ -26,6 +27,8 @@ const EMPTY_STATE: AppState = {
   bankList: [],
   dimensionWeights: { ...DEFAULT_DIMENSION_WEIGHTS },
   evaluations: [],
+  cycles: [],
+  activeCycleId: null,
 };
 
 let _state: AppState = { ...EMPTY_STATE };
@@ -55,18 +58,16 @@ export function evaluationToBankData(ev: Evaluation): BankData {
 
 function buildBanksMap(
   bankList: Bank[],
-  approvedEvals: Evaluation[],
-  fallbackEvals: Evaluation[],
+  evaluations: Evaluation[],
 ): Record<string, BankData> {
   const banks: Record<string, BankData> = {};
   bankList.forEach(bank => {
-    // Aprovada tem prioridade; se não, mostrar a mais recente (submitted/rejected/draft).
-    // Para o gestor, fallbackEvals = todas → permite rever avaliações submetidas.
-    const approved = approvedEvals.find(e => e.bankId === bank.id);
-    const fallback = fallbackEvals
+    const ev = evaluations
       .filter(e => e.bankId === bank.id)
-      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
-    const ev       = approved ?? fallback;
+      .sort((a, b) => {
+        const statusOrder: Record<string, number> = { approved: 0, submitted: 1, rejected: 2, draft: 3 };
+        return (statusOrder[a.status] ?? 9) - (statusOrder[b.status] ?? 9);
+      })[0];
     if (ev) {
       banks[bank.id] = evaluationToBankData(ev);
     } else {
@@ -90,24 +91,31 @@ function buildBanksMap(
 /** Carrega todos os dados do Supabase. Chamado pelo AppLayout após auth. */
 export async function loadFromSupabase(isGestor: boolean): Promise<void> {
   try {
-    // 3 queries em paralelo (em vez de 35+)
-    const [bankList, dimensionWeights, myEvals, approvedEvals, allEvals] = await Promise.all([
+    const [bankList, dimensionWeights, cycles] = await Promise.all([
       fetchBanks(),
       fetchDimensionWeights(),
-      isGestor ? Promise.resolve([]) : fetchMyEvaluations(),
-      fetchApprovedEvaluations(),
-      isGestor ? fetchAllEvaluations() : Promise.resolve([]),
+      fetchCycles(),
     ]);
 
-    // Gestor: fallback = todas (para rever submetidas). Agente: fallback = as suas.
-    const banks = buildBanksMap(bankList, approvedEvals, isGestor ? allEvals : myEvals);
+    const activeCycle = cycles.find(c => c.status === 'open') ?? cycles[0] ?? null;
+    const activeCycleId = activeCycle?.id ?? null;
+
+    const evaluations = activeCycleId
+      ? (isGestor
+          ? await fetchAllEvaluations(activeCycleId)
+          : await fetchVisibleEvaluations(activeCycleId))
+      : [];
+
+    const banks = buildBanksMap(bankList, evaluations);
 
     _loading = false;
     commit({
       bankList,
       dimensionWeights,
       banks,
-      evaluations: isGestor ? allEvals : myEvals,
+      evaluations,
+      cycles,
+      activeCycleId,
     });
   } catch (err) {
     console.error('[store] Erro ao carregar do Supabase:', err);
@@ -234,14 +242,18 @@ export function useStore() {
   // ── Avaliação CRUD ────────────────────────────────────────────────────────
 
   const startEvaluation = useCallback(async (bankId: string): Promise<Evaluation | null> => {
-    // Verificar se já existe uma avaliação draft/rejected para este banco
+    const cycleId = _state.activeCycleId;
+    if (!cycleId) return null;
     const existing = _state.evaluations.find(
-      e => e.bankId === bankId && ['draft', 'rejected'].includes(e.status)
+      e => e.bankId === bankId && e.cycleId === cycleId && ['draft', 'rejected'].includes(e.status)
     );
     if (existing) return existing;
-    const ev = await createEvaluation(bankId);
+    const ev = await createEvaluation(bankId, cycleId);
     if (!ev) return null;
-    commit({ evaluations: [..._state.evaluations, ev] });
+    commit({
+      evaluations: [..._state.evaluations, ev],
+      banks: { ..._state.banks, [bankId]: evaluationToBankData(ev) },
+    });
     return ev;
   }, []);
 
@@ -319,6 +331,30 @@ export function useStore() {
     commit({ dimensionWeights: weights });
   }, []);
 
+  // ── Ciclos de avaliação (gestor) ──────────────────────────────────────────
+
+  const createCycle = useCallback(async (name: string) => {
+    const cycle: EvaluationCycle = await createCycleDb(name);
+    const cycles = [cycle, ..._state.cycles];
+    commit({ cycles, activeCycleId: cycle.id, evaluations: [], banks: buildBanksMap(_state.bankList, []) });
+  }, []);
+
+  const closeCycle = useCallback(async (cycleId: string) => {
+    await closeCycleDb(cycleId);
+    const cycles = _state.cycles.map(c =>
+      c.id === cycleId ? { ...c, status: 'closed' as const, closedAt: new Date().toISOString() } : c
+    );
+    commit({ cycles });
+  }, []);
+
+  const selectCycle = useCallback(async (cycleId: string, isGestor: boolean) => {
+    const evaluations = isGestor
+      ? await fetchAllEvaluations(cycleId)
+      : await fetchVisibleEvaluations(cycleId);
+    const banks = buildBanksMap(_state.bankList, evaluations);
+    commit({ activeCycleId: cycleId, evaluations, banks });
+  }, []);
+
   return {
     state,
     updateCriterionScore,
@@ -333,5 +369,8 @@ export function useStore() {
     updateBankRecord,
     removeBank,
     updateDimensionWeights,
+    createCycle,
+    closeCycle,
+    selectCycle,
   };
 }
