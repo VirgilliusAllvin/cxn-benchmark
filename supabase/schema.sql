@@ -95,7 +95,7 @@ create table if not exists evaluations (
   submitted_at       timestamptz,
   reviewed_at        timestamptz,
   gestor_id          uuid references profiles(id),
-  unique(cycle_id, bank_id)
+  constraint uq_evaluation_per_bank_per_cycle unique (cycle_id, bank_id)
 );
 alter table evaluations enable row level security;
 

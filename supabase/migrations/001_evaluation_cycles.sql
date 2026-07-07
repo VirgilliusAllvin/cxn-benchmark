@@ -15,10 +15,12 @@ create table if not exists evaluation_cycles (
 );
 alter table evaluation_cycles enable row level security;
 
+drop policy if exists "Todos leem ciclos" on evaluation_cycles;
 create policy "Todos leem ciclos"
   on evaluation_cycles for select
   using (auth.role() = 'authenticated');
 
+drop policy if exists "Gestor gere ciclos" on evaluation_cycles;
 create policy "Gestor gere ciclos"
   on evaluation_cycles for all
   using (exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'gestor'));
@@ -31,20 +33,22 @@ do $$
 declare
   v_cycle_id uuid;
 begin
-  insert into evaluation_cycles (name, status, created_at)
-  values ('Ciclo Inicial', 'open', now())
-  returning id into v_cycle_id;
+  if not exists (select 1 from evaluation_cycles where name = 'Ciclo Inicial') then
+    insert into evaluation_cycles (name, status, created_at)
+    values ('Ciclo Inicial', 'open', now())
+    returning id into v_cycle_id;
 
-  update evaluations set cycle_id = v_cycle_id;
+    update evaluations set cycle_id = v_cycle_id where cycle_id is null;
 
-  -- Remove duplicates: keep the most recent evaluation per bank
-  delete from evaluations
-  where id not in (
-    select distinct on (bank_id) id
-    from evaluations
-    where cycle_id = v_cycle_id
-    order by bank_id, updated_at desc
-  );
+    -- Remove duplicates: keep the most recent evaluation per bank
+    delete from evaluations
+    where id not in (
+      select distinct on (bank_id) id
+      from evaluations
+      where cycle_id = v_cycle_id
+      order by bank_id, updated_at desc
+    );
+  end if;
 end $$;
 
 -- 4. Make cycle_id NOT NULL and add unique constraint
