@@ -60,10 +60,31 @@ create policy "Gestor actualiza config"
     exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'gestor')
   );
 
+-- ── Ciclos de avaliacao ──────────────────────────────────────
+create table if not exists evaluation_cycles (
+  id         uuid primary key default gen_random_uuid(),
+  name       text not null,
+  status     text not null default 'open'
+               check (status in ('open', 'closed')),
+  created_by uuid references profiles(id),
+  created_at timestamptz default now(),
+  closed_at  timestamptz
+);
+alter table evaluation_cycles enable row level security;
+
+create policy "Todos leem ciclos"
+  on evaluation_cycles for select
+  using (auth.role() = 'authenticated');
+
+create policy "Gestor gere ciclos"
+  on evaluation_cycles for all
+  using (exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'gestor'));
+
 -- ── Avaliações ────────────────────────────────────────────────
 create table if not exists evaluations (
   id                 uuid primary key default gen_random_uuid(),
   bank_id            text references banks(id) on delete cascade,
+  cycle_id           uuid references evaluation_cycles(id),
   agente_id          uuid references profiles(id),
   status             text not null default 'draft'
                        check (status in ('draft', 'submitted', 'approved', 'rejected')),
@@ -73,36 +94,36 @@ create table if not exists evaluations (
   updated_at         timestamptz default now(),
   submitted_at       timestamptz,
   reviewed_at        timestamptz,
-  gestor_id          uuid references profiles(id)
+  gestor_id          uuid references profiles(id),
+  unique(cycle_id, bank_id)
 );
 alter table evaluations enable row level security;
 
--- Agente vê as suas próprias avaliações
-create policy "Agente vê as suas avaliações"
+create policy "Agente ve as suas avaliacoes"
   on evaluations for select using (agente_id = auth.uid());
 
--- Gestor vê todas
-create policy "Gestor vê todas as avaliações"
+create policy "Todos veem submitted e approved"
+  on evaluations for select using (status in ('submitted', 'approved'));
+
+create policy "Gestor ve todas as avaliacoes"
   on evaluations for select using (
     exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'gestor')
   );
 
--- Benchmark partilhado: todos os autenticados veem as avaliações APROVADAS
-create policy "Todos leem avaliações aprovadas"
-  on evaluations for select using (status = 'approved');
-
--- Agente cria avaliações para si próprio
-create policy "Agente cria avaliação"
-  on evaluations for insert with check (agente_id = auth.uid());
-
--- Agente edita as suas em draft ou rejected
-create policy "Agente edita a sua avaliação (draft/rejected)"
-  on evaluations for update using (
-    agente_id = auth.uid() and status in ('draft', 'rejected')
+create policy "Agente cria avaliacao"
+  on evaluations for insert with check (
+    agente_id = auth.uid()
+    and exists (select 1 from evaluation_cycles c where c.id = cycle_id and c.status = 'open')
   );
 
--- Gestor pode actualizar qualquer avaliação (aprovação/rejeição)
-create policy "Gestor actualiza qualquer avaliação"
+create policy "Agente edita draft/rejected"
+  on evaluations for update using (
+    agente_id = auth.uid()
+    and status in ('draft', 'rejected')
+    and exists (select 1 from evaluation_cycles c where c.id = cycle_id and c.status = 'open')
+  );
+
+create policy "Gestor actualiza qualquer avaliacao"
   on evaluations for update using (
     exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'gestor')
   );
@@ -121,28 +142,30 @@ create table if not exists criterion_scores (
 );
 alter table criterion_scores enable row level security;
 
-create policy "Agente lê scores da sua avaliação"
+create policy "Agente le scores da sua avaliacao"
   on criterion_scores for select using (
     exists (select 1 from evaluations e where e.id = evaluation_id and e.agente_id = auth.uid())
   );
 
-create policy "Gestor lê todos os scores"
+create policy "Todos leem scores submitted/approved"
+  on criterion_scores for select using (
+    exists (select 1 from evaluations e where e.id = evaluation_id and e.status in ('submitted', 'approved'))
+  );
+
+create policy "Gestor le todos os scores"
   on criterion_scores for select using (
     exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'gestor')
   );
 
-create policy "Todos leem scores de avaliações aprovadas"
-  on criterion_scores for select using (
-    exists (select 1 from evaluations e where e.id = evaluation_id and e.status = 'approved')
-  );
-
-create policy "Agente escreve scores em avaliação draft/rejected"
+create policy "Agente escreve scores draft/rejected"
   on criterion_scores for all using (
     exists (
       select 1 from evaluations e
+      join evaluation_cycles c on c.id = e.cycle_id
       where e.id = evaluation_id
         and e.agente_id = auth.uid()
         and e.status in ('draft', 'rejected')
+        and c.status = 'open'
     )
   );
 
@@ -164,32 +187,34 @@ create table if not exists evidences (
 );
 alter table evidences enable row level security;
 
-create policy "Agente lê evidências da sua avaliação"
+create policy "Agente le evidencias da sua avaliacao"
   on evidences for select using (
     exists (select 1 from evaluations e where e.id = evaluation_id and e.agente_id = auth.uid())
   );
 
-create policy "Gestor lê todas as evidências"
+create policy "Todos leem evidencias submitted/approved"
+  on evidences for select using (
+    exists (select 1 from evaluations e where e.id = evaluation_id and e.status in ('submitted', 'approved'))
+  );
+
+create policy "Gestor le todas as evidencias"
   on evidences for select using (
     exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'gestor')
   );
 
-create policy "Todos leem evidências de avaliações aprovadas"
-  on evidences for select using (
-    exists (select 1 from evaluations e where e.id = evaluation_id and e.status = 'approved')
-  );
-
-create policy "Agente escreve evidências em avaliação draft/rejected"
+create policy "Agente escreve evidencias draft/rejected"
   on evidences for all using (
     exists (
       select 1 from evaluations e
+      join evaluation_cycles c on c.id = e.cycle_id
       where e.id = evaluation_id
         and e.agente_id = auth.uid()
         and e.status in ('draft', 'rejected')
+        and c.status = 'open'
     )
   );
 
-create policy "Gestor escreve qualquer evidência"
+create policy "Gestor escreve qualquer evidencia"
   on evidences for all using (
     exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'gestor')
   );
