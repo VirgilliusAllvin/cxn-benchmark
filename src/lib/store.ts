@@ -33,6 +33,7 @@ const EMPTY_STATE: AppState = {
 
 let _state: AppState = { ...EMPTY_STATE };
 let _loading = true;
+let _selectCycleToken = 0;
 const _listeners = new Set<() => void>();
 
 function notify() {
@@ -334,6 +335,9 @@ export function useStore() {
   // ── Ciclos de avaliação (gestor) ──────────────────────────────────────────
 
   const createCycle = useCallback(async (name: string) => {
+    if (_state.cycles.some(c => c.status === 'open')) {
+      throw new Error('Já existe um ciclo aberto. Feche-o antes de criar um novo.');
+    }
     const cycle: EvaluationCycle = await createCycleDb(name);
     const cycles = [cycle, ..._state.cycles];
     commit({ cycles, activeCycleId: cycle.id, evaluations: [], banks: buildBanksMap(_state.bankList, []) });
@@ -348,9 +352,11 @@ export function useStore() {
   }, []);
 
   const selectCycle = useCallback(async (cycleId: string, isGestor: boolean) => {
+    const token = ++_selectCycleToken;
     const evaluations = isGestor
       ? await fetchAllEvaluations(cycleId)
       : await fetchVisibleEvaluations(cycleId);
+    if (token !== _selectCycleToken) return; // resposta obsoleta, superada por uma chamada mais recente
     const banks = buildBanksMap(_state.bankList, evaluations);
     commit({ activeCycleId: cycleId, evaluations, banks });
   }, []);
