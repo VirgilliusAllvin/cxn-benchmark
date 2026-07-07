@@ -39,6 +39,7 @@ export function Avaliacao() {
   const [expandedDims, setExpandedDims] = useState<Set<string>>(new Set(['D1']));
   const [saved, setSaved] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [startingEval, setStartingEval] = useState(false);
   const [pendingEvidence, setPendingEvidence] = useState<Record<string, {
     type: 'link' | 'note' | 'image'; content: string; description: string; tags: Tag[]; file?: File; previewUrl?: string
@@ -199,9 +200,16 @@ export function Avaliacao() {
   async function handleSubmit() {
     if (!evaluationId) return;
     setSubmitting(true);
-    await submitForReview(evaluationId);
-    setSubmitting(false);
-    navigate(`/banks/${selectedBank}`);
+    setSubmitError(null);
+    try {
+      await submitForReview(evaluationId);
+      navigate(`/banks/${selectedBank}`);
+    } catch (err) {
+      console.error('[Avaliacao] Erro ao submeter para revisão:', err);
+      setSubmitError(err instanceof Error ? err.message : 'Não foi possível submeter. Tenta novamente.');
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   const STATUS_BANNER: Record<string, { bg: string; text: string; icon: React.ReactNode; msg: string }> = {
@@ -280,6 +288,14 @@ export function Avaliacao() {
         <div className={`flex items-start gap-2 text-sm px-4 py-3 rounded-xl border mb-5 ${banner.bg} ${banner.text}`}>
           {banner.icon}
           <span>{banner.msg}</span>
+        </div>
+      )}
+
+      {/* Submit error banner */}
+      {submitError && (
+        <div className="flex items-start gap-2 text-sm px-4 py-3 rounded-xl border mb-5 bg-red-50 border-red-200 text-red-700">
+          <AlertTriangle size={14} />
+          <span>{submitError}</span>
         </div>
       )}
 

@@ -121,6 +121,9 @@ create policy "Agente edita draft/rejected"
     agente_id = auth.uid()
     and status in ('draft', 'rejected')
     and exists (select 1 from evaluation_cycles c where c.id = cycle_id and c.status = 'open')
+  )
+  with check (
+    agente_id = auth.uid()
   );
 
 create policy "Gestor actualiza qualquer avaliacao"
