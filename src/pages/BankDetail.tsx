@@ -36,6 +36,14 @@ export function BankDetail() {
   const evaluationId = evaluation?.id;
   const evalStatus = bData?.status ?? 'draft';
 
+  // A edição (remover evidência, notas) só é permitida com o ciclo activo aberto.
+  // As policies RLS de escrita do agente exigem `evaluation_cycles.status = 'open'`
+  // e falham silenciosamente (sem erro, 0 linhas afectadas) quando o ciclo está
+  // fechado — sem esta verificação a UI ficaria dessincronizada da BD.
+  const activeCycle = state.cycles.find(c => c.id === state.activeCycleId);
+  const isCycleOpen = activeCycle?.status === 'open';
+  const canEditEvaluation = evalStatus !== 'submitted' && evalStatus !== 'approved' && isCycleOpen;
+
   if (!bank || !bData) {
     return <div className="p-8 text-brand-gray">Banco não encontrado.</div>;
   }
@@ -303,7 +311,7 @@ export function BankDetail() {
                             : <FileText size={12} className="text-brand-gray" />}
                         <span className="text-[10px] text-brand-gray font-medium">{ev.criterionName}</span>
                       </div>
-                      {evalStatus !== 'submitted' && evalStatus !== 'approved' && (
+                      {canEditEvaluation && (
                         <button
                           onClick={() => handleRemoveEvidence(ev.criterionId, ev.id)}
                           className="text-brand-gray hover:text-red-500 transition-colors"
@@ -349,12 +357,12 @@ export function BankDetail() {
             <label className="block text-xs font-bold text-brand-dark mb-2">Observações Estratégicas</label>
             <textarea
               className="w-full h-48 text-sm border border-gray-200 rounded-xl p-4 resize-none focus:outline-none focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue transition-all text-brand-dark placeholder-brand-gray disabled:bg-gray-50 disabled:cursor-not-allowed"
-              placeholder={evalStatus === 'submitted' || evalStatus === 'approved' ? '' : 'Adicione observações estratégicas, insights ou recomendações para este banco...'}
-              disabled={evalStatus === 'submitted' || evalStatus === 'approved'}
+              placeholder={canEditEvaluation ? 'Adicione observações estratégicas, insights ou recomendações para este banco...' : ''}
+              disabled={!canEditEvaluation}
               value={bData.notes}
               onChange={e => evaluationId && updateBankNotes(evaluationId, e.target.value)}
             />
-            {evalStatus !== 'submitted' && evalStatus !== 'approved' && (
+            {canEditEvaluation && (
               <p className="text-xs text-brand-gray mt-2">Guardado automaticamente.</p>
             )}
           </div>
