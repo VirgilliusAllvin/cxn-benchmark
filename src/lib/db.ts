@@ -3,7 +3,7 @@
  * Usa bulk queries para minimizar o número de chamadas à API.
  */
 import { supabase } from './supabase';
-import type { Bank, Evaluation, CriterionScore, Evidence, EvaluationStatus, UserProfile } from './types';
+import type { Bank, Evaluation, CriterionScore, Evidence, EvaluationStatus, UserProfile, EvaluationCycle, CycleStatus } from './types';
 import { DEFAULT_DIMENSION_WEIGHTS } from './data';
 
 // ── Tipos de linha Supabase ───────────────────────────────────────────────────
@@ -20,6 +20,7 @@ interface DbEvaluation {
   submitted_at: string | null;
   reviewed_at: string | null;
   gestor_id: string | null;
+  cycle_id: string;
 }
 
 interface DbCriterionScore {
@@ -41,6 +42,15 @@ interface DbEvidence {
   description: string;
   collected_at: string;
   tags: string[];
+}
+
+interface DbEvaluationCycle {
+  id: string;
+  name: string;
+  status: 'open' | 'closed';
+  created_by: string;
+  created_at: string;
+  closed_at: string | null;
 }
 
 // ── Mappers ───────────────────────────────────────────────────────────────────
@@ -86,6 +96,7 @@ function mapEvaluation(
     submittedAt: row.submitted_at ?? undefined,
     reviewedAt: row.reviewed_at ?? undefined,
     gestorId: row.gestor_id ?? undefined,
+    cycleId: row.cycle_id,
     criterionScores,
   };
 }
@@ -174,38 +185,89 @@ export async function saveDimensionWeights(weights: Record<string, number>): Pro
   if (error) throw error;
 }
 
+// ── Ciclos de avaliacao ──────────────────────────────────────────────────────
+
+export async function fetchCycles(): Promise<EvaluationCycle[]> {
+  const { data, error } = await supabase
+    .from('evaluation_cycles')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map((r: DbEvaluationCycle) => ({
+    id: r.id,
+    name: r.name,
+    status: r.status as CycleStatus,
+    createdBy: r.created_by,
+    createdAt: r.created_at,
+    closedAt: r.closed_at ?? undefined,
+  }));
+}
+
+export async function createCycleDb(name: string): Promise<EvaluationCycle> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+  const { data, error } = await supabase
+    .from('evaluation_cycles')
+    .insert({ name, status: 'open', created_by: user.id })
+    .select('*')
+    .single();
+  if (error) throw error;
+  const r = data as DbEvaluationCycle;
+  return {
+    id: r.id,
+    name: r.name,
+    status: r.status as CycleStatus,
+    createdBy: r.created_by,
+    createdAt: r.created_at,
+    closedAt: r.closed_at ?? undefined,
+  };
+}
+
+export async function closeCycleDb(cycleId: string): Promise<void> {
+  const { error } = await supabase
+    .from('evaluation_cycles')
+    .update({ status: 'closed', closed_at: new Date().toISOString() })
+    .eq('id', cycleId);
+  if (error) throw error;
+}
+
 // ── Avaliações — bulk ─────────────────────────────────────────────────────────
 
 /** Avaliações do agente actual (todas) — 1 query de avaliações + 2 bulk */
-export async function fetchMyEvaluations(): Promise<Evaluation[]> {
+export async function fetchMyEvaluations(cycleId?: string): Promise<Evaluation[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
-  const { data, error } = await supabase
+  let query = supabase
     .from('evaluations')
     .select('*')
     .eq('agente_id', user.id)
     .order('updated_at', { ascending: false });
+  if (cycleId) query = query.eq('cycle_id', cycleId);
+  const { data, error } = await query;
   if (error || !data) return [];
   return loadEvaluationsBulk(data as DbEvaluation[]);
 }
 
-/** Avaliações aprovadas (para ranking/dashboard) — 1 query + 2 bulk */
-export async function fetchApprovedEvaluations(): Promise<Evaluation[]> {
-  const { data, error } = await supabase
+/** Avaliações visíveis (para ranking/dashboard) — 1 query + 2 bulk */
+export async function fetchVisibleEvaluations(cycleId?: string): Promise<Evaluation[]> {
+  let query = supabase
     .from('evaluations')
     .select('*')
-    .eq('status', 'approved')
-    .order('reviewed_at', { ascending: false });
+    .order('updated_at', { ascending: false });
+  if (cycleId) query = query.eq('cycle_id', cycleId);
+  const { data, error } = await query;
   if (error || !data) return [];
   return loadEvaluationsBulk(data as DbEvaluation[]);
 }
 
 /** Todas as avaliações (gestor) — 1 query + 2 bulk */
-export async function fetchAllEvaluations(): Promise<Evaluation[]> {
-  const { data, error } = await supabase
+export async function fetchAllEvaluations(cycleId?: string): Promise<Evaluation[]> {
+  let query = supabase
     .from('evaluations')
     .select('*')
     .order('updated_at', { ascending: false });
+  if (cycleId) query = query.eq('cycle_id', cycleId);
+  const { data, error } = await query;
   if (error || !data) return [];
   return loadEvaluationsBulk(data as DbEvaluation[]);
 }
@@ -221,12 +283,12 @@ export async function fetchEvaluationById(evalId: string): Promise<Evaluation | 
 
 // ── Avaliação CRUD ────────────────────────────────────────────────────────────
 
-export async function createEvaluation(bankId: string): Promise<Evaluation | null> {
+export async function createEvaluation(bankId: string, cycleId: string): Promise<Evaluation | null> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
   const { data, error } = await supabase
     .from('evaluations')
-    .insert({ bank_id: bankId, agente_id: user.id, status: 'draft' })
+    .insert({ bank_id: bankId, agente_id: user.id, status: 'draft', cycle_id: cycleId })
     .select('id')
     .single();
   if (error || !data) throw error;
