@@ -54,6 +54,7 @@ alter table evaluations add constraint uq_evaluation_per_bank_per_cycle unique (
 -- 5. Drop old RLS policies on evaluations
 drop policy if exists "Agente ve as suas avaliacoes" on evaluations;
 drop policy if exists "Agente ve as suas avaliações" on evaluations;
+drop policy if exists "Agente vê as suas avaliações" on evaluations;
 drop policy if exists "Gestor ve todas as avaliacoes" on evaluations;
 drop policy if exists "Gestor vê todas as avaliações" on evaluations;
 drop policy if exists "Todos leem avaliacoes aprovadas" on evaluations;
