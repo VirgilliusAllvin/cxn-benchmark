@@ -12,6 +12,15 @@ export function Evidencias() {
 
   const bankList = state.bankList;
 
+  // A remoção de evidências só é permitida com o ciclo activo aberto e a
+  // avaliação ainda editável (draft/rejected) — mesmo raciocínio de
+  // `canEditEvaluation` em BankDetail.tsx. As policies RLS de escrita do
+  // agente exigem `evaluation_cycles.status = 'open'` e falham silenciosamente
+  // (sem erro, 0 linhas afectadas) quando o ciclo está fechado — sem esta
+  // verificação a UI ficaria dessincronizada da BD.
+  const activeCycle = state.cycles.find(c => c.id === state.activeCycleId);
+  const isCycleOpen = activeCycle?.status === 'open';
+
   // Gather all evidences — derivar bankId a partir da iteração
   const allEvidences = useMemo(() => {
     const evs: Array<{
@@ -27,10 +36,12 @@ export function Evidencias() {
       description: string;
       collectedAt: string;
       tags: Tag[];
+      canRemove: boolean;
     }> = [];
     bankList.forEach(bank => {
       const bData = state.banks[bank.id];
       if (!bData) return;
+      const canRemove = isCycleOpen && bData.status !== 'submitted' && bData.status !== 'approved';
       CRITERIA.forEach(criterion => {
         const cs = bData.criterionScores?.[criterion.id];
         (cs?.evidences ?? []).forEach(ev => {
@@ -47,12 +58,13 @@ export function Evidencias() {
             description: ev.description,
             collectedAt: ev.collectedAt,
             tags: ev.tags as Tag[],
+            canRemove,
           });
         });
       });
     });
     return evs.sort((a, b) => b.collectedAt.localeCompare(a.collectedAt));
-  }, [state, bankList]);
+  }, [state, bankList, isCycleOpen]);
 
   const filtered = useMemo(() => allEvidences.filter(ev => {
     const matchBank = filterBank === 'all' || ev.bankId === filterBank;
@@ -133,12 +145,14 @@ export function Evidencias() {
                       <div className="text-[10px] text-brand-gray">{ev.criterionName}</div>
                     </div>
                   </div>
-                  <button
-                    onClick={() => removeEvidence(ev.evaluationId, ev.criterionId, ev.id)}
-                    className="text-brand-gray hover:text-red-500 transition-colors p-1"
-                  >
-                    <Trash2 size={13} />
-                  </button>
+                  {ev.canRemove && (
+                    <button
+                      onClick={() => removeEvidence(ev.evaluationId, ev.criterionId, ev.id)}
+                      className="text-brand-gray hover:text-red-500 transition-colors p-1"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  )}
                 </div>
 
                 {/* Dim badge */}
