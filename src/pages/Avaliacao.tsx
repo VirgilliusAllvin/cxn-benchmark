@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   CheckCircle, ChevronDown, ChevronUp, Link2, FileText,
-  Plus, X, Save, Send, AlertTriangle, Lock, Image as ImageIcon,
+  Plus, X, Save, Send, AlertTriangle, Lock, Image as ImageIcon, Clock,
 } from 'lucide-react';
 import { DIMENSIONS, CRITERIA_BY_DIMENSION, SCORE_LABELS, TAGS, TAG_COLORS } from '../lib/data';
 import { useStore } from '../lib/store';
@@ -27,6 +27,8 @@ export function Avaliacao() {
     removeEvidence,
     startEvaluation,
     submitForReview,
+    requestAccess,
+    cancelAccess,
   } = useStore();
 
   const activeCycleId = state.activeCycleId;
@@ -46,6 +48,8 @@ export function Avaliacao() {
   }>>({});
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
   const [uploadError, setUploadError] = useState<Record<string, string>>({});
+  const [requestingAccess, setRequestingAccess] = useState(false);
+  const [accessError, setAccessError] = useState<string | null>(null);
 
   // Manter ref actualizada para revogar previewUrls abertas ao desmontar (ex.: trocar de banco)
   const pendingEvidenceRef = useRef(pendingEvidence);
@@ -99,6 +103,38 @@ export function Avaliacao() {
     if (ev.status === 'submitted') return 'submitted';
     if (ev.agenteId === profile?.id) return 'mine';
     return 'taken';
+  }
+
+  const myPendingRequest = evaluation
+    ? state.accessRequests.find(r => r.evaluationId === evaluation.id && r.requesterId === profile?.id && r.status === 'pending')
+    : null;
+
+  async function handleRequestAccess() {
+    if (!evaluation) return;
+    setRequestingAccess(true);
+    setAccessError(null);
+    try {
+      await requestAccess(evaluation.id);
+    } catch (err) {
+      console.error('[Avaliacao] Erro ao pedir acesso:', err);
+      setAccessError(err instanceof Error ? err.message : 'Não foi possível enviar o pedido de acesso.');
+    } finally {
+      setRequestingAccess(false);
+    }
+  }
+
+  async function handleCancelAccess() {
+    if (!myPendingRequest) return;
+    setRequestingAccess(true);
+    setAccessError(null);
+    try {
+      await cancelAccess(myPendingRequest.id);
+    } catch (err) {
+      console.error('[Avaliacao] Erro ao cancelar pedido:', err);
+      setAccessError(err instanceof Error ? err.message : 'Não foi possível cancelar o pedido.');
+    } finally {
+      setRequestingAccess(false);
+    }
   }
 
   async function ensureEvaluation() {
@@ -327,11 +363,44 @@ export function Avaliacao() {
             </select>
             {(() => {
               if (bankStatus(selectedBank) !== 'taken') return null;
-              const badgeInfo = { bg: 'bg-red-50 text-red-600', label: 'Em avaliação por outro agente' };
               return (
-                <div className={`mt-2 inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-1 rounded-lg ${badgeInfo.bg}`}>
-                  <AlertTriangle size={11} />
-                  {badgeInfo.label}
+                <div className="mt-2 flex items-center gap-2 flex-wrap">
+                  <div className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-1 rounded-lg bg-red-50 text-red-600">
+                    <AlertTriangle size={11} />
+                    Em avaliação por outro agente
+                  </div>
+                  {isAgente && (
+                    myPendingRequest ? (
+                      <button
+                        onClick={handleCancelAccess}
+                        disabled={requestingAccess}
+                        className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors disabled:opacity-40"
+                      >
+                        {requestingAccess ? (
+                          <div className="w-3 h-3 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <Clock size={11} />
+                        )}
+                        Pedido pendente — Cancelar
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handleRequestAccess}
+                        disabled={requestingAccess}
+                        className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-brand-blue text-white hover:bg-blue-700 transition-colors disabled:opacity-40"
+                      >
+                        {requestingAccess ? (
+                          <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <Send size={11} />
+                        )}
+                        Pedir Acesso
+                      </button>
+                    )
+                  )}
+                  {accessError && (
+                    <span className="text-[11px] text-red-500">{accessError}</span>
+                  )}
                 </div>
               );
             })()}

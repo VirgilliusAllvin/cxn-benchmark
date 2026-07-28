@@ -3,7 +3,7 @@
  * Usa bulk queries para minimizar o número de chamadas à API.
  */
 import { supabase } from './supabase';
-import type { Bank, Evaluation, CriterionScore, Evidence, EvaluationStatus, UserProfile, EvaluationCycle, CycleStatus } from './types';
+import type { Bank, Evaluation, CriterionScore, Evidence, EvaluationStatus, UserProfile, EvaluationCycle, CycleStatus, AccessRequest } from './types';
 import { DEFAULT_DIMENSION_WEIGHTS } from './data';
 
 // ── Tipos de linha Supabase ───────────────────────────────────────────────────
@@ -389,24 +389,145 @@ export async function submitEvaluation(evaluationId: string): Promise<void> {
 
 export async function approveEvaluation(evaluationId: string): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();
-  const { error } = await supabase.from('evaluations').update({
+  const { data, error } = await supabase.from('evaluations').update({
     status: 'approved',
     reviewed_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     gestor_id: user?.id,
     rejection_comment: '',
-  }).eq('id', evaluationId);
+  }).eq('id', evaluationId).select('id');
   if (error) throw error;
+  assertRowsAffected(data);
 }
 
 export async function rejectEvaluation(evaluationId: string, comment: string): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();
-  const { error } = await supabase.from('evaluations').update({
+  const { data, error } = await supabase.from('evaluations').update({
     status: 'rejected',
     reviewed_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     gestor_id: user?.id,
     rejection_comment: comment,
-  }).eq('id', evaluationId);
+  }).eq('id', evaluationId).select('id');
   if (error) throw error;
+  assertRowsAffected(data);
+}
+
+// ── Pedidos de acesso ──────────────────────────────────────────────────────
+
+interface DbAccessRequest {
+  id: string;
+  evaluation_id: string;
+  requester_id: string;
+  status: 'pending' | 'approved' | 'rejected';
+  created_at: string;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  comment: string;
+}
+
+function mapAccessRequest(row: DbAccessRequest, requesterName?: string): AccessRequest {
+  return {
+    id: row.id,
+    evaluationId: row.evaluation_id,
+    requesterId: row.requester_id,
+    requesterName,
+    status: row.status,
+    createdAt: row.created_at,
+    resolvedAt: row.resolved_at ?? undefined,
+    resolvedBy: row.resolved_by ?? undefined,
+    comment: row.comment,
+  };
+}
+
+export async function fetchAccessRequests(cycleId?: string): Promise<AccessRequest[]> {
+  if (cycleId) {
+    const { data: evalRows } = await supabase
+      .from('evaluations')
+      .select('id')
+      .eq('cycle_id', cycleId);
+    const evalIds = (evalRows ?? []).map(r => r.id);
+    if (evalIds.length === 0) return [];
+
+    const { data, error } = await supabase
+      .from('access_requests')
+      .select('*, requester:profiles!requester_id(name)')
+      .in('evaluation_id', evalIds)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data ?? []).map((row: Record<string, unknown>) => {
+      const requesterName = (row.requester as Record<string, unknown> | null)?.name as string | undefined;
+      return mapAccessRequest(row as unknown as DbAccessRequest, requesterName);
+    });
+  }
+
+  const { data, error } = await supabase
+    .from('access_requests')
+    .select('*, requester:profiles!requester_id(name)')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map((row: Record<string, unknown>) => {
+    const requesterName = (row.requester as Record<string, unknown> | null)?.name as string | undefined;
+    return mapAccessRequest(row as unknown as DbAccessRequest, requesterName);
+  });
+}
+
+export async function createAccessRequest(evaluationId: string): Promise<AccessRequest> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+  const { data, error } = await supabase
+    .from('access_requests')
+    .insert({ evaluation_id: evaluationId, requester_id: user.id })
+    .select('*, requester:profiles!requester_id(name)')
+    .single();
+  if (error) {
+    if (error.code === '23505') throw new Error('Já existe um pedido de acesso pendente para esta avaliação.');
+    throw error;
+  }
+  const requesterName = (data.requester as Record<string, unknown> | null)?.name as string | undefined;
+  return mapAccessRequest(data as unknown as DbAccessRequest, requesterName);
+}
+
+export async function resolveAccessRequest(
+  requestId: string,
+  decision: 'approved' | 'rejected',
+  comment?: string,
+): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  const { data, error } = await supabase
+    .from('access_requests')
+    .update({
+      status: decision,
+      resolved_at: new Date().toISOString(),
+      resolved_by: user.id,
+      comment: comment ?? '',
+    })
+    .eq('id', requestId)
+    .select('id, evaluation_id, requester_id')
+    .single();
+  if (error) throw error;
+
+  if (decision === 'approved') {
+    const { error: transferErr } = await supabase
+      .from('evaluations')
+      .update({
+        agente_id: data.requester_id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', data.evaluation_id)
+      .select('id');
+    if (transferErr) throw transferErr;
+  }
+}
+
+export async function cancelAccessRequest(requestId: string): Promise<void> {
+  const { data, error } = await supabase
+    .from('access_requests')
+    .delete()
+    .eq('id', requestId)
+    .select('id');
+  if (error) throw error;
+  assertRowsAffected(data);
 }

@@ -8,7 +8,7 @@
  * a base de dados canónica. O store local é apenas uma cache em memória.
  */
 import { useSyncExternalStore, useCallback } from 'react';
-import type { AppState, Bank, BankData, Evaluation, EvaluationCycle, EvaluationStatus } from './types';
+import type { AppState, Bank, BankData, Evaluation, EvaluationCycle, EvaluationStatus, AccessRequest } from './types';
 import { CRITERIA, DEFAULT_DIMENSION_WEIGHTS } from './data';
 import {
   fetchBanks, fetchDimensionWeights, fetchAllEvaluations,
@@ -18,6 +18,8 @@ import {
   updateEvaluationNotes, submitEvaluation, approveEvaluation,
   rejectEvaluation, createEvaluation,
   fetchCycles, createCycleDb, closeCycleDb,
+  fetchAccessRequests, createAccessRequest as createAccessRequestDb,
+  resolveAccessRequest as resolveAccessRequestDb, cancelAccessRequest as cancelAccessRequestDb,
 } from './db';
 
 // ── Estado inicial (vazio até carregar do Supabase) ───────────────────────────
@@ -29,6 +31,7 @@ const EMPTY_STATE: AppState = {
   evaluations: [],
   cycles: [],
   activeCycleId: null,
+  accessRequests: [],
 };
 
 let _state: AppState = { ...EMPTY_STATE };
@@ -101,11 +104,14 @@ export async function loadFromSupabase(isGestor: boolean): Promise<void> {
     const activeCycle = cycles.find(c => c.status === 'open') ?? cycles[0] ?? null;
     const activeCycleId = activeCycle?.id ?? null;
 
-    const evaluations = activeCycleId
-      ? (isGestor
-          ? await fetchAllEvaluations(activeCycleId)
-          : await fetchVisibleEvaluations(activeCycleId))
-      : [];
+    const [evaluations, accessRequests] = activeCycleId
+      ? await Promise.all([
+          isGestor
+            ? fetchAllEvaluations(activeCycleId)
+            : fetchVisibleEvaluations(activeCycleId),
+          fetchAccessRequests(activeCycleId).catch(() => [] as AccessRequest[]),
+        ])
+      : [[], []];
 
     const banks = buildBanksMap(bankList, evaluations);
 
@@ -117,6 +123,7 @@ export async function loadFromSupabase(isGestor: boolean): Promise<void> {
       evaluations,
       cycles,
       activeCycleId,
+      accessRequests,
     });
   } catch (err) {
     console.error('[store] Erro ao carregar do Supabase:', err);
@@ -288,7 +295,13 @@ export function useStore() {
         ? { ...e, status: 'rejected' as EvaluationStatus, rejectionComment: comment, reviewedAt: new Date().toISOString() }
         : e
     );
-    commit({ evaluations });
+    const ev = _state.evaluations.find(e => e.id === evaluationId);
+    if (ev) {
+      const rejectedBankData: BankData = { ...evaluationToBankData(ev), status: 'rejected' };
+      commit({ evaluations, banks: { ..._state.banks, [ev.bankId]: rejectedBankData } });
+    } else {
+      commit({ evaluations });
+    }
   }, []);
 
   // ── Banks CRUD (gestor) ───────────────────────────────────────────────────
@@ -353,12 +366,50 @@ export function useStore() {
 
   const selectCycle = useCallback(async (cycleId: string, isGestor: boolean) => {
     const token = ++_selectCycleToken;
-    const evaluations = isGestor
-      ? await fetchAllEvaluations(cycleId)
-      : await fetchVisibleEvaluations(cycleId);
-    if (token !== _selectCycleToken) return; // resposta obsoleta, superada por uma chamada mais recente
+    const [evaluations, accessRequests] = await Promise.all([
+      isGestor
+        ? fetchAllEvaluations(cycleId)
+        : fetchVisibleEvaluations(cycleId),
+      fetchAccessRequests(cycleId).catch(() => [] as AccessRequest[]),
+    ]);
+    if (token !== _selectCycleToken) return;
     const banks = buildBanksMap(_state.bankList, evaluations);
-    commit({ activeCycleId: cycleId, evaluations, banks });
+    commit({ activeCycleId: cycleId, evaluations, banks, accessRequests });
+  }, []);
+
+  // ── Pedidos de acesso ────────────────────────────────────────────────────
+
+  const requestAccess = useCallback(async (evaluationId: string) => {
+    const req = await createAccessRequestDb(evaluationId);
+    commit({ accessRequests: [req, ..._state.accessRequests] });
+    return req;
+  }, []);
+
+  const resolveAccess = useCallback(async (requestId: string, decision: 'approved' | 'rejected', comment?: string) => {
+    await resolveAccessRequestDb(requestId, decision, comment);
+    const accessRequests = _state.accessRequests.map(r =>
+      r.id === requestId
+        ? { ...r, status: decision, resolvedAt: new Date().toISOString(), comment: comment ?? '' }
+        : r
+    ) as typeof _state.accessRequests;
+
+    if (decision === 'approved') {
+      const req = _state.accessRequests.find(r => r.id === requestId);
+      if (req) {
+        const evaluations = _state.evaluations.map(e =>
+          e.id === req.evaluationId ? { ...e, agenteId: req.requesterId } : e
+        );
+        const banks = buildBanksMap(_state.bankList, evaluations);
+        commit({ accessRequests, evaluations, banks });
+        return;
+      }
+    }
+    commit({ accessRequests });
+  }, []);
+
+  const cancelAccess = useCallback(async (requestId: string) => {
+    await cancelAccessRequestDb(requestId);
+    commit({ accessRequests: _state.accessRequests.filter(r => r.id !== requestId) });
   }, []);
 
   return {
@@ -378,5 +429,8 @@ export function useStore() {
     createCycle,
     closeCycle,
     selectCycle,
+    requestAccess,
+    resolveAccess,
+    cancelAccess,
   };
 }

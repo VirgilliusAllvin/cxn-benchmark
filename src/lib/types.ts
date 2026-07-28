@@ -65,6 +65,22 @@ export interface Evaluation {
   criterionScores: Record<string, CriterionScore>; // keyed by criterion.id
 }
 
+// ── Access Request ───────────────────────────────────────────────
+
+export type AccessRequestStatus = 'pending' | 'approved' | 'rejected';
+
+export interface AccessRequest {
+  id: string;
+  evaluationId: string;
+  requesterId: string;
+  requesterName?: string;
+  status: AccessRequestStatus;
+  createdAt: string;
+  resolvedAt?: string;
+  resolvedBy?: string;
+  comment: string;
+}
+
 // ── Bank ──────────────────────────────────────────────────────────────────────
 
 export interface Bank {
@@ -94,4 +110,5 @@ export type AppState = {
   evaluations: Evaluation[];
   cycles: EvaluationCycle[];
   activeCycleId: string | null;
+  accessRequests: AccessRequest[];
 };
