@@ -308,7 +308,13 @@ export async function createEvaluation(bankId: string, cycleId: string): Promise
     .insert({ bank_id: bankId, agente_id: user.id, status: 'draft', cycle_id: cycleId })
     .select('id')
     .single();
-  if (error || !data) throw error;
+  if (error) {
+    if (error.code === '23505') {
+      throw new Error('Este banco já está a ser avaliado neste ciclo por outro agente.');
+    }
+    throw error;
+  }
+  if (!data) return null;
   return fetchEvaluationById(data.id);
 }
 

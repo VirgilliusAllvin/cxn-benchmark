@@ -143,9 +143,16 @@ export function Avaliacao() {
     if (!isGestor && (status === 'taken' || status === 'submitted' || status === 'approved')) return null;
     if (evaluationId) return evaluationId;
     setStartingEval(true);
-    const ev = await startEvaluation(selectedBank);
-    setStartingEval(false);
-    return ev?.id ?? null;
+    try {
+      const ev = await startEvaluation(selectedBank);
+      return ev?.id ?? null;
+    } catch (err) {
+      console.error('[Avaliacao] Erro ao iniciar avaliação:', err);
+      setSubmitError(err instanceof Error ? err.message : 'Não foi possível iniciar a avaliação. Outro agente pode ter reclamado este banco.');
+      return null;
+    } finally {
+      setStartingEval(false);
+    }
   }
 
   async function handleScoreChange(criterionId: string, scoreVal: number) {
