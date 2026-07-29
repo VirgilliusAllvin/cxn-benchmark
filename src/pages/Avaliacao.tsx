@@ -97,6 +97,7 @@ export function Avaliacao() {
 
   async function ensureEvaluation() {
     if (!activeCycleId) return null;
+    if (!selectedBank) return null;
     const status = bankStatus(selectedBank);
     if (!isGestor && (status === 'taken' || status === 'submitted' || status === 'approved')) return null;
     if (evaluationId) return evaluationId;
