@@ -23,6 +23,16 @@ create policy "Gestor lê todos os perfis"
     exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'gestor')
   );
 
+create policy "Agente le perfis de quem pediu acesso"
+  on profiles for select using (
+    exists (
+      select 1 from access_requests ar
+      join evaluations e on e.id = ar.evaluation_id
+      where ar.requester_id = profiles.id
+        and e.agente_id = auth.uid()
+    )
+  );
+
 create policy "Utilizador actualiza o próprio perfil"
   on profiles for update using (auth.uid() = id);
 
@@ -124,6 +134,13 @@ create policy "Agente edita draft/rejected"
   )
   with check (
     agente_id = auth.uid()
+  );
+
+create policy "Agente ve avaliacoes draft de outros no ciclo"
+  on evaluations for select using (
+    status = 'draft'
+    and agente_id != auth.uid()
+    and exists (select 1 from evaluation_cycles c where c.id = cycle_id and c.status = 'open')
   );
 
 create policy "Gestor actualiza qualquer avaliacao"

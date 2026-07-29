@@ -53,7 +53,7 @@ export function Avaliacao() {
   }, []);
 
   const evaluation = selectedBank
-    ? state.evaluations.find(e => e.bankId === selectedBank && e.cycleId === activeCycleId && e.agenteId === profile?.id)
+    ? state.evaluations.find(e => e.bankId === selectedBank && e.cycleId === activeCycleId)
     : undefined;
   const evaluationId = evaluation?.id;
   const evalStatus = evaluation?.status ?? null;

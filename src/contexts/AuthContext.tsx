@@ -53,17 +53,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (mounted) setLoading(false);
     });
 
-    // Subscrever mudanças de auth
+    // Subscrever mudanças de auth — só refazer profile em SIGNED_IN/INITIAL_SESSION
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
       console.log('[Auth] onAuthStateChange:', event, session?.user?.email ?? 'no session');
       setSession(session ?? null);
-      if (session?.user) {
-        const p = await safeLoadProfile(session.user.id);
-        console.log('[Auth] profile from event:', p);
-        if (mounted) setProfile(p);
-      } else {
+      if (event === 'SIGNED_OUT') {
         if (mounted) setProfile(null);
+      } else if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+        if (session?.user) {
+          const p = await safeLoadProfile(session.user.id);
+          console.log('[Auth] profile from event:', p);
+          if (mounted && p) setProfile(p);
+        }
       }
       if (mounted) setLoading(false);
     });

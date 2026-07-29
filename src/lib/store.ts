@@ -253,7 +253,7 @@ export function useStore() {
     const cycleId = _state.activeCycleId;
     if (!cycleId) return null;
     const existing = _state.evaluations.find(
-      e => e.bankId === bankId && e.cycleId === cycleId && ['draft', 'rejected'].includes(e.status)
+      e => e.bankId === bankId && e.cycleId === cycleId
     );
     if (existing) {
       if (currentUserId && existing.agenteId !== currentUserId) return null;
