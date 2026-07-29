@@ -178,7 +178,7 @@ export function Banks() {
                 </Link>
                 {isAgente && (
                   <Link
-                    to={`/avaliacao?bank=${b.id}`}
+                    to={`/avaliacao/${b.id}`}
                     className="flex-1 flex items-center justify-center gap-1 text-xs text-white font-medium py-1.5 rounded-lg transition-colors"
                     style={{ background: '#1818db' }}
                     onMouseEnter={e => (e.currentTarget.style.background = '#1212b0')}

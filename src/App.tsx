@@ -8,6 +8,7 @@ import { Ranking } from './pages/Ranking';
 import { Banks } from './pages/Banks';
 import { BankDetail } from './pages/BankDetail';
 import { Dimensoes } from './pages/Dimensoes';
+import { BankSelection } from './pages/BankSelection';
 import { Avaliacao } from './pages/Avaliacao';
 import { Evidencias } from './pages/Evidencias';
 import { Exportar } from './pages/Exportar';
@@ -30,7 +31,8 @@ export default function App() {
               <Route path="/banks" element={<Banks />} />
               <Route path="/banks/:id" element={<BankDetail />} />
               <Route path="/dimensoes" element={<Dimensoes />} />
-              <Route path="/avaliacao" element={<Avaliacao />} />
+              <Route path="/avaliacao" element={<BankSelection />} />
+              <Route path="/avaliacao/:bankId" element={<Avaliacao />} />
               <Route path="/evidencias" element={<Evidencias />} />
               <Route path="/exportar" element={<Exportar />} />
 

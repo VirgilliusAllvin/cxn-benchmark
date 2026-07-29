@@ -205,7 +205,7 @@ export function BankDetail() {
           ))}
           <div className="ml-auto pr-4">
             <Link
-              to={`/avaliacao?bank=${id}`}
+              to={`/avaliacao/${id}`}
               className="flex items-center gap-1.5 text-xs bg-brand-blue text-white px-3 py-1.5 rounded-lg font-medium hover:bg-blue-700 transition-colors"
             >
               <ClipboardList size={12} /> Avaliar
@@ -294,7 +294,7 @@ export function BankDetail() {
               <div className="flex flex-col items-center justify-center py-12 text-brand-gray">
                 <FileText size={32} className="mb-3 opacity-30" />
                 <p className="text-sm">Nenhuma evidência registada ainda.</p>
-                <Link to={`/avaliacao?bank=${id}`} className="mt-3 text-xs text-brand-blue hover:underline">
+                <Link to={`/avaliacao/${id}`} className="mt-3 text-xs text-brand-blue hover:underline">
                   Adicionar evidências na avaliação →
                 </Link>
               </div>

@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   CheckCircle, ChevronDown, ChevronUp, Link2, FileText,
-  Plus, X, Save, Send, AlertTriangle, Lock, Image as ImageIcon, Clock,
+  Plus, X, ArrowLeft, Send, AlertTriangle, Lock, Image as ImageIcon, Save,
 } from 'lucide-react';
 import { DIMENSIONS, CRITERIA_BY_DIMENSION, SCORE_LABELS, TAGS, TAG_COLORS } from '../lib/data';
 import { useStore } from '../lib/store';
@@ -17,7 +17,7 @@ import type { Tag } from '../lib/data';
 const DEVICES = ['Android', 'iOS', 'Web', 'Outro'];
 
 export function Avaliacao() {
-  const [params] = useSearchParams();
+  const { bankId: selectedBank } = useParams<{ bankId: string }>();
   const navigate = useNavigate();
   const { profile } = useAuth();
   const {
@@ -27,19 +27,12 @@ export function Avaliacao() {
     removeEvidence,
     startEvaluation,
     submitForReview,
-    requestAccess,
-    cancelAccess,
   } = useStore();
 
   const activeCycleId = state.activeCycleId;
   const activeCycle = state.cycles.find(c => c.id === activeCycleId);
 
-  const bankList = state.bankList;
-  const firstBank = bankList[0]?.id ?? '';
-
-  const [selectedBank, setSelectedBank] = useState(params.get('bank') ?? firstBank);
   const [expandedDims, setExpandedDims] = useState<Set<string>>(new Set(['D1']));
-  const [saved, setSaved] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [startingEval, setStartingEval] = useState(false);
@@ -48,10 +41,9 @@ export function Avaliacao() {
   }>>({});
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
   const [uploadError, setUploadError] = useState<Record<string, string>>({});
-  const [requestingAccess, setRequestingAccess] = useState(false);
-  const [accessError, setAccessError] = useState<string | null>(null);
+  const [autoSaveVisible, setAutoSaveVisible] = useState(false);
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Manter ref actualizada para revogar previewUrls abertas ao desmontar (ex.: trocar de banco)
   const pendingEvidenceRef = useRef(pendingEvidence);
   pendingEvidenceRef.current = pendingEvidence;
   useEffect(() => () => {
@@ -60,31 +52,30 @@ export function Avaliacao() {
     });
   }, []);
 
-  // Encontrar avaliação activa para o banco seleccionado
-  const evaluation = state.evaluations.find(e => e.bankId === selectedBank);
+  const evaluation = selectedBank
+    ? state.evaluations.find(e => e.bankId === selectedBank && e.cycleId === activeCycleId && e.agenteId === profile?.id)
+    : undefined;
   const evaluationId = evaluation?.id;
   const evalStatus = evaluation?.status ?? null;
 
-  // Agente só pode editar em draft ou rejected
   const isAgente = profile?.role === 'agente';
   const isGestor = profile?.role === 'gestor';
   const canEdit = isGestor || !evalStatus
-    || ((evalStatus === 'draft' || evalStatus === 'rejected') && bankStatus(selectedBank) === 'mine');
+    || ((evalStatus === 'draft' || evalStatus === 'rejected') && selectedBank && bankStatus(selectedBank) === 'mine');
   const isLocked = !canEdit;
 
-  useEffect(() => {
-    const p = params.get('bank');
-    if (p) setSelectedBank(p);
-  }, [params]);
-
-  if (!activeCycle || activeCycle.status !== 'open') {
+  if (!selectedBank || !activeCycle || activeCycle.status !== 'open') {
     return (
       <div className="p-4 md:p-8 animate-fade-in">
-        <PageHeader title="Avaliacao" subtitle="Avaliar bancos por dimensao" />
+        <PageHeader title="Avaliação" subtitle="Avaliar bancos por dimensão" />
         <div className="flex flex-col items-center justify-center py-24 text-brand-gray">
           <AlertTriangle size={40} className="mb-4 opacity-20" />
-          <p className="text-sm font-medium">Nenhum ciclo de avaliacao aberto.</p>
-          <p className="text-xs mt-1">Contacte o gestor para abrir um novo ciclo.</p>
+          <p className="text-sm font-medium">
+            {!selectedBank ? 'Nenhum banco seleccionado.' : 'Nenhum ciclo de avaliação aberto.'}
+          </p>
+          <button onClick={() => navigate('/avaliacao')} className="text-xs text-brand-blue mt-2 hover:underline">
+            Voltar à selecção de bancos
+          </button>
         </div>
       </div>
     );
@@ -95,7 +86,6 @@ export function Avaliacao() {
   const totalCriteria = Object.values(CRITERIA_BY_DIMENSION).reduce((s, arr) => s + arr.length, 0);
   const score = bData ? globalScore100(bData, state.dimensionWeights) : 0;
 
-  // Estado de reivindicação do banco no ciclo activo: disponível, meu, ocupado por outro agente, submetido ou aprovado
   function bankStatus(bankId: string): 'available' | 'mine' | 'taken' | 'submitted' | 'approved' {
     const ev = state.evaluations.find(e => e.bankId === bankId && e.cycleId === activeCycleId);
     if (!ev) return 'available';
@@ -105,38 +95,6 @@ export function Avaliacao() {
     return 'taken';
   }
 
-  const myPendingRequest = evaluation
-    ? state.accessRequests.find(r => r.evaluationId === evaluation.id && r.requesterId === profile?.id && r.status === 'pending')
-    : null;
-
-  async function handleRequestAccess() {
-    if (!evaluation) return;
-    setRequestingAccess(true);
-    setAccessError(null);
-    try {
-      await requestAccess(evaluation.id);
-    } catch (err) {
-      console.error('[Avaliacao] Erro ao pedir acesso:', err);
-      setAccessError(err instanceof Error ? err.message : 'Não foi possível enviar o pedido de acesso.');
-    } finally {
-      setRequestingAccess(false);
-    }
-  }
-
-  async function handleCancelAccess() {
-    if (!myPendingRequest) return;
-    setRequestingAccess(true);
-    setAccessError(null);
-    try {
-      await cancelAccess(myPendingRequest.id);
-    } catch (err) {
-      console.error('[Avaliacao] Erro ao cancelar pedido:', err);
-      setAccessError(err instanceof Error ? err.message : 'Não foi possível cancelar o pedido.');
-    } finally {
-      setRequestingAccess(false);
-    }
-  }
-
   async function ensureEvaluation() {
     if (!activeCycleId) return null;
     const status = bankStatus(selectedBank);
@@ -144,7 +102,7 @@ export function Avaliacao() {
     if (evaluationId) return evaluationId;
     setStartingEval(true);
     try {
-      const ev = await startEvaluation(selectedBank);
+      const ev = await startEvaluation(selectedBank, profile?.id);
       return ev?.id ?? null;
     } catch (err) {
       console.error('[Avaliacao] Erro ao iniciar avaliação:', err);
@@ -155,17 +113,24 @@ export function Avaliacao() {
     }
   }
 
+  function flashAutoSave() {
+    setAutoSaveVisible(true);
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = setTimeout(() => setAutoSaveVisible(false), 2000);
+  }
+
   async function handleScoreChange(criterionId: string, scoreVal: number) {
     const eid = await ensureEvaluation();
     if (!eid) return;
-    // Marcar como respondido — inclui "Não" binário (score 0)
     await updateCriterionScore(eid, criterionId, { score: scoreVal, answered: true });
+    flashAutoSave();
   }
 
   async function handleFieldChange(criterionId: string, field: 'observations' | 'device', value: string) {
     const eid = await ensureEvaluation();
     if (!eid) return;
     await updateCriterionScore(eid, criterionId, { [field]: value });
+    flashAutoSave();
   }
 
   function toggleDim(id: string) {
@@ -233,11 +198,8 @@ export function Avaliacao() {
     await removeEvidence(evaluationId, criterionId, evidenceId);
   }
 
-  function handleSave() {
-    setSaved(true);
-    setTimeout(() => {
-      navigate(`/banks/${selectedBank}`);
-    }, 800);
+  function handleBack() {
+    navigate('/avaliacao');
   }
 
   async function handleSubmit() {
@@ -246,7 +208,7 @@ export function Avaliacao() {
     setSubmitError(null);
     try {
       await submitForReview(evaluationId);
-      navigate(`/banks/${selectedBank}`);
+      navigate('/avaliacao');
     } catch (err) {
       console.error('[Avaliacao] Erro ao submeter para revisão:', err);
       setSubmitError(err instanceof Error ? err.message : 'Não foi possível submeter. Tenta novamente.');
@@ -280,7 +242,7 @@ export function Avaliacao() {
 
   const banner = evalStatus && evalStatus !== 'draft' ? STATUS_BANNER[evalStatus] : null;
 
-  if (bankList.length === 0) {
+  if (state.bankList.length === 0) {
     return (
       <div className="p-4 md:p-8">
         <PageHeader title="Avaliação" subtitle="Nenhum banco disponível" />
@@ -291,7 +253,7 @@ export function Avaliacao() {
     );
   }
 
-  const bankInfo = bankList.find(b => b.id === selectedBank);
+  const bankInfo = state.bankList.find(b => b.id === selectedBank);
 
   return (
     <div className="p-4 md:p-8 animate-fade-in">
@@ -301,15 +263,12 @@ export function Avaliacao() {
         actions={
           <div className="flex items-center gap-2">
             <button
-              onClick={handleSave}
-              className={`flex items-center gap-2 text-sm px-4 py-2 rounded-xl font-medium transition-all ${
-                saved ? 'bg-green-500 text-white' : 'bg-gray-100 text-brand-dark hover:bg-gray-200'
-              }`}
+              onClick={handleBack}
+              className="flex items-center gap-2 text-sm px-4 py-2 rounded-xl font-medium bg-gray-100 text-brand-dark hover:bg-gray-200 transition-all"
             >
-              {saved ? <><CheckCircle size={14} /> Guardado!</> : <><Save size={14} /> Guardar</>}
+              <ArrowLeft size={14} /> Voltar
             </button>
 
-            {/* Botão submeter — apenas agente, apenas quando em draft */}
             {isAgente && (!evalStatus || evalStatus === 'draft' || evalStatus === 'rejected') && (
               <button
                 onClick={handleSubmit}
@@ -342,78 +301,18 @@ export function Avaliacao() {
         </div>
       )}
 
-      {/* Bank selector + progress */}
+      {/* Auto-save indicator */}
+      {autoSaveVisible && (
+        <div className="flex items-center gap-1.5 text-xs text-green-600 mb-3 animate-fade-in">
+          <Save size={12} />
+          <span className="font-medium">Guardado automaticamente</span>
+        </div>
+      )}
+
+      {/* Progress + score */}
       <div className="bg-white rounded-2xl p-5 shadow-card border border-gray-100 mb-6">
         <div className="flex items-center gap-6 flex-wrap">
-          <div className="flex-1 min-w-[200px]">
-            <label className="block text-xs font-bold text-brand-dark mb-2">Banco</label>
-            <select
-              value={selectedBank}
-              onChange={e => setSelectedBank(e.target.value)}
-              className="w-full text-sm border border-gray-200 rounded-xl px-4 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue transition-all text-brand-black"
-            >
-              {bankList.map(b => {
-                const bStatus = bankStatus(b.id);
-                const suffix = bStatus === 'taken'
-                  ? ' — em avaliação por outro agente'
-                  : bStatus === 'submitted'
-                    ? ' — submetido para revisão'
-                    : bStatus === 'approved'
-                      ? ' — aprovado'
-                      : '';
-                return (
-                  <option key={b.id} value={b.id} disabled={bStatus === 'taken'}>
-                    {b.shortName} — {b.name}{suffix}
-                  </option>
-                );
-              })}
-            </select>
-            {(() => {
-              if (bankStatus(selectedBank) !== 'taken') return null;
-              return (
-                <div className="mt-2 flex items-center gap-2 flex-wrap">
-                  <div className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-1 rounded-lg bg-red-50 text-red-600">
-                    <AlertTriangle size={11} />
-                    Em avaliação por outro agente
-                  </div>
-                  {isAgente && (
-                    myPendingRequest ? (
-                      <button
-                        onClick={handleCancelAccess}
-                        disabled={requestingAccess}
-                        className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors disabled:opacity-40"
-                      >
-                        {requestingAccess ? (
-                          <div className="w-3 h-3 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
-                        ) : (
-                          <Clock size={11} />
-                        )}
-                        Pedido pendente — Cancelar
-                      </button>
-                    ) : (
-                      <button
-                        onClick={handleRequestAccess}
-                        disabled={requestingAccess}
-                        className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-brand-blue text-white hover:bg-blue-700 transition-colors disabled:opacity-40"
-                      >
-                        {requestingAccess ? (
-                          <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        ) : (
-                          <Send size={11} />
-                        )}
-                        Pedir Acesso
-                      </button>
-                    )
-                  )}
-                  {accessError && (
-                    <span className="text-[11px] text-red-500">{accessError}</span>
-                  )}
-                </div>
-              );
-            })()}
-          </div>
-
-          <div className="shrink-0">
+          <div className="shrink-0 flex-1">
             <div className="text-xs font-bold text-brand-dark mb-2">Progresso</div>
             <div className="flex items-center gap-3">
               <div className="w-full sm:w-48 h-2 bg-gray-100 rounded-full overflow-hidden">
@@ -775,12 +674,10 @@ export function Avaliacao() {
       {/* Bottom action bar */}
       <div className="sticky bottom-6 flex justify-end gap-3 mt-6">
         <button
-          onClick={handleSave}
-          className={`flex items-center gap-2 text-sm px-6 py-3 rounded-xl font-semibold shadow-blue transition-all ${
-            saved ? 'bg-green-500 text-white' : 'bg-gray-200 text-brand-dark hover:bg-gray-300'
-          }`}
+          onClick={handleBack}
+          className="flex items-center gap-2 text-sm px-6 py-3 rounded-xl font-semibold bg-gray-200 text-brand-dark hover:bg-gray-300 shadow-blue transition-all"
         >
-          {saved ? <><CheckCircle size={16} /> A guardar...</> : <><Save size={16} /> Guardar</>}
+          <ArrowLeft size={16} /> Voltar
         </button>
 
         {isAgente && (!evalStatus || evalStatus === 'draft' || evalStatus === 'rejected') && (

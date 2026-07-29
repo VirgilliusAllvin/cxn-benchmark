@@ -249,13 +249,16 @@ export function useStore() {
 
   // ── Avaliação CRUD ────────────────────────────────────────────────────────
 
-  const startEvaluation = useCallback(async (bankId: string): Promise<Evaluation | null> => {
+  const startEvaluation = useCallback(async (bankId: string, currentUserId?: string): Promise<Evaluation | null> => {
     const cycleId = _state.activeCycleId;
     if (!cycleId) return null;
     const existing = _state.evaluations.find(
       e => e.bankId === bankId && e.cycleId === cycleId && ['draft', 'rejected'].includes(e.status)
     );
-    if (existing) return existing;
+    if (existing) {
+      if (currentUserId && existing.agenteId !== currentUserId) return null;
+      return existing;
+    }
     const ev = await createEvaluation(bankId, cycleId);
     if (!ev) return null;
     commit({
@@ -268,9 +271,17 @@ export function useStore() {
   const submitForReview = useCallback(async (evaluationId: string) => {
     await submitEvaluation(evaluationId);
     const evaluations = _state.evaluations.map(e =>
-      e.id === evaluationId ? { ...e, status: 'submitted' as EvaluationStatus, submittedAt: new Date().toISOString() } : e
+      e.id === evaluationId
+        ? { ...e, status: 'submitted' as EvaluationStatus, submittedAt: new Date().toISOString(), rejectionComment: '' }
+        : e
     );
-    commit({ evaluations });
+    const ev = _state.evaluations.find(e => e.id === evaluationId);
+    if (ev) {
+      const submittedBankData: BankData = { ...evaluationToBankData(ev), status: 'submitted' };
+      commit({ evaluations, banks: { ..._state.banks, [ev.bankId]: submittedBankData } });
+    } else {
+      commit({ evaluations });
+    }
   }, []);
 
   const approve = useCallback(async (evaluationId: string) => {
@@ -377,6 +388,23 @@ export function useStore() {
     commit({ activeCycleId: cycleId, evaluations, banks, accessRequests });
   }, []);
 
+  // ── Refresh de avaliações (para sincronizar estado stale) ─────────────
+
+  const refreshEvaluations = useCallback(async (isGestor: boolean) => {
+    const cycleId = _state.activeCycleId;
+    if (!cycleId) return;
+    const token = ++_selectCycleToken;
+    const [evaluations, accessRequests] = await Promise.all([
+      isGestor
+        ? fetchAllEvaluations(cycleId)
+        : fetchVisibleEvaluations(cycleId),
+      fetchAccessRequests(cycleId).catch(() => [] as AccessRequest[]),
+    ]);
+    if (token !== _selectCycleToken) return;
+    const banks = buildBanksMap(_state.bankList, evaluations);
+    commit({ evaluations, banks, accessRequests });
+  }, []);
+
   // ── Pedidos de acesso ────────────────────────────────────────────────────
 
   const requestAccess = useCallback(async (evaluationId: string) => {
@@ -429,6 +457,7 @@ export function useStore() {
     createCycle,
     closeCycle,
     selectCycle,
+    refreshEvaluations,
     requestAccess,
     resolveAccess,
     cancelAccess,
